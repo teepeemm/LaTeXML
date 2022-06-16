@@ -52,5 +52,3 @@ auto
 tools/travis/dist
 # Various editor workspaces
 .vscode/
-# Mac OS desktop adds this
-.DS_Store
