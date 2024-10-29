@@ -52,6 +52,7 @@ my $FLAG_EMPH         = 0x10;
 # Mappings from various forms of names or component names in TeX
 # Given a font, we'd like to map it to the "logical" names derived from LaTeX,
 # (w/ loss of fine grained control).
+# and (importantly) the encoding needed to lookup unicode in a FontMap!
 # I'd like to use Karl Berry's font naming scheme
 # (See http://www.tug.org/fontname/html/)
 # but it seems to be a one-way mapping, and moreover, doesn't even fit CM fonts!
@@ -60,52 +61,58 @@ my $FLAG_EMPH         = 0x10;
 # NOTE: This probably doesn't really belong in here...
 
 my %font_family = (
-  cmr   => { family => 'serif' },      cmss  => { family => 'sansserif' },
-  cmtt  => { family => 'typewriter' }, cmvtt => { family => 'typewriter' },
-  cmti  => { family => 'typewriter', shape => 'italic' },
-  cmfib => { family => 'serif' },      cmfr  => { family => 'serif' },
-  cmdh  => { family => 'serif' },      cm    => { family => 'serif' },
-  ptm   => { family => 'serif' },      ppl   => { family => 'serif' },
-  pnc   => { family => 'serif' },      pbk   => { family => 'serif' },
-  phv   => { family => 'sansserif' },  pag   => { family => 'serif' },
-  pcr   => { family => 'typewriter' }, pzc   => { family => 'script' },
-  put   => { family => 'serif' },      bch   => { family => 'serif' },
-  psy   => { family => 'symbol' },     pzd   => { family => 'dingbats' },
-  ccr   => { family => 'serif' },      ccy   => { family => 'symbol' },
-  cmbr  => { family => 'sansserif' },  cmtl  => { family => 'typewriter' },
-  cmbrs => { family => 'symbol' },     ul9   => { family => 'typewriter' },
-  txr   => { family => 'serif' },      txss  => { family => 'sansserif' },
-  txtt  => { family => 'typewriter' }, txms  => { family => 'symbol' },
-  txsya => { family => 'symbol' },     txsyb => { family => 'symbol' },
-  pxr   => { family => 'serif' },      pxms  => { family => 'symbol' },
-  pxsya => { family => 'symbol' },     pxsyb => { family => 'symbol' },
-  futs  => { family => 'serif' },
-  uaq   => { family => 'serif' },   ugq  => { family => 'sansserif' },
-  eur   => { family => 'serif' },   eus  => { family => 'script' },
-  euf   => { family => 'fraktur' }, euex => { family => 'symbol' },
-  # The following are actually math fonts.
-  ms    => { family => 'symbol' },
-  ccm   => { family => 'serif',      shape    => 'italic' },
-  cmm   => { family => 'italic',     encoding => 'OML' },
-  cmex  => { family => 'symbol',     encoding => 'OMX' },      # Not really symbol, but...
-  cmsy  => { family => 'symbol',     encoding => 'OMS' },
-  ccitt => { family => 'typewriter', shape    => 'italic' },
-  cmbrm => { family => 'sansserif',  shape    => 'italic' },
-  futm  => { family => 'serif',      shape    => 'italic' },
-  futmi => { family => 'serif',      shape    => 'italic' },
-  txmi  => { family => 'serif',      shape    => 'italic' },
-  pxmi  => { family => 'serif',      shape    => 'italic' },
+  # Computer Modern
+  cm     => { family   => 'serif' },    # base for synthesizing cmbx, cmsl ...
+  cmr    => { family   => 'serif' },
+  cmm    => { family   => 'math', shape => 'italic', encoding => 'OML' },    # cmmi
+  cmsy   => { encoding => 'OMS' },
+  cmex   => { encoding => 'OMX' },
+  cmss   => { family   => 'sansserif' },
+  cmtt   => { family   => 'typewriter' },
+  cmvtt  => { family   => 'typewriter' },
+  cmssq  => { family   => 'sansserif' },                                     # quote style?
+  cmssqi => { family   => 'sansserif', shape => 'italic' },                  # quote style?
+  cmt    => { family   => 'serif' },                                         # for cmti "text italic"
+  cmmib  => { family   => 'italic', series   => 'bold' },
+  cmbsy  => { series   => 'bold',   encoding => 'OMS' },
+  cmfib  => { family   => 'serif' },
+  cmfr   => { family   => 'serif' },
+  cmdh   => { family   => 'serif' },
+  cmdunh => { family   => 'serif' },    # like cmr10 but with tall body heights
+  cmu    => { family   => 'serif' },    # unslanted italic ??
+  cmsltt => { family   => 'typewriter', shape => 'slanted' },
+  cmbrm  => { family   => 'sansserif',  shape => 'italic' },
+  # Some Blackboard Bold fonts
   bbm   => { family => 'blackboard' },
   bbold => { family => 'blackboard' },
   bbmss => { family => 'blackboard' },
-  # some ams fonts
-  cmmib => { family => 'italic', series   => 'bold' },
-  cmbsy => { family => 'symbol', series   => 'bold' },
-  msa   => { family => 'symbol', encoding => 'AMSa' },
-  msb   => { family => 'symbol', encoding => 'AMSb' },
-  # Are these really the same?
-  msx => { family => 'symbol', encoding => 'AMSa' },
-  msy => { family => 'symbol', encoding => 'AMSb' },
+  # Computer Concrete
+  ccr   => { family => 'serif' },
+  ccm   => { family => 'serif', shape => 'italic' },
+  cct   => { family => 'serif' },
+  ccitt => { family => 'typewriter', shape => 'italic' },
+  # AMS fonts
+  msa => { encoding => 'AMSa' },
+  msb => { encoding => 'AMSb' },
+  msx => { encoding => 'AMSa' },    # Are these really the same? (or even real?)
+  msy => { encoding => 'AMSb' },
+  # Euler
+  eur  => { family   => 'serif' },
+  eus  => { family   => 'script' },
+  euf  => { family   => 'fraktur' },
+  euex => { encoding => 'OMX' },
+  # TX Fonts (Times Roman)
+  txr   => { family   => 'serif' },
+  txmi  => { family   => 'serif', shape => 'italic' },
+  txss  => { family   => 'sansserif' },
+  txtt  => { family   => 'typewriter' },
+  txsya => { encoding => 'AMSa' },
+  txsyb => { encoding => 'AMSb' },
+  # PX Fonts (Palladio)
+  pxr   => { family   => 'serif' },
+  pxmi  => { family   => 'serif', shape => 'italic' },
+  pxsya => { encoding => 'AMSa' },
+  pxsyb => { encoding => 'AMSb' },
   # Pretend to recognize xy's fonts
   xydash => { family => 'graphic' },
   xyatip => { family => 'graphic' },
@@ -116,17 +123,44 @@ my %font_family = (
   xycmbt => { family => 'graphic' },
   xyluat => { family => 'graphic' },
   xylubt => { family => 'graphic' },
+  # Fourier
+  futm  => { family => 'serif', shape => 'italic' },
+  futmi => { family => 'serif', shape => 'italic' },
+  # More fonts that need to be better sorted, classified & labelled
+  # family symbol, dingbats are nonsense: We need an encoding and FontMap!!!
+  ptm   => { family => 'serif' },      ppl  => { family => 'serif' },
+  pnc   => { family => 'serif' },      pbk  => { family => 'serif' },
+  phv   => { family => 'sansserif' },  pag  => { family => 'serif' },
+  pcr   => { family => 'typewriter' }, pzc  => { family => 'script' },
+  put   => { family => 'serif' },      bch  => { family => 'serif' },
+  psy   => { family => 'symbol' },     pzd  => { family => 'dingbats' },
+  cmbr  => { family => 'sansserif' },  cmtl => { family => 'typewriter' },
+  cmbrs => { family => 'symbol' },     ul9  => { family => 'typewriter' },
+  futs  => { family => 'serif' },
+  uaq   => { family => 'serif' }, ugq => { family => 'sansserif' },
 );
 
 # Maps the "series code" to an abstract font series name
 my %font_series = (
-  '' => { series => 'medium' }, m   => { series => 'medium' }, mc => { series => 'medium' },
-  b  => { series => 'bold' },   bc  => { series => 'bold' },   bx => { series => 'bold' },
-  sb => { series => 'bold' },   sbc => { series => 'bold' },   bm => { series => 'bold' });
+  ''  => {},    # default medium
+  m   => { series => 'medium' },
+  mc  => { series => 'medium' },
+  b   => { series => 'bold' },
+  bc  => { series => 'bold' },
+  bx  => { series => 'bold' },
+  sb  => { series => 'bold' },
+  sbc => { series => 'bold' },
+  bm  => { series => 'bold' });
 
 # Maps the "shape code" to an abstract font shape name.
-my %font_shape = ('' => { shape => 'upright' }, n => { shape => 'upright' }, i => { shape => 'italic' }, it => { shape => 'italic' },
-  sl => { shape => 'slanted' }, sc => { shape => 'smallcaps' }, csc => { shape => 'smallcaps' });
+my %font_shape = (
+  ''  => {},    # default upright
+  n   => { shape => 'upright' },
+  i   => { shape => 'italic' },
+  it  => { shape => 'italic' },
+  sl  => { shape => 'slanted' },
+  sc  => { shape => 'smallcaps' },
+  csc => { shape => 'smallcaps' });
 
 # These could be exported...
 sub lookupFontFamily {
@@ -172,21 +206,20 @@ my $FONTREGEXP
 sub decodeFontname {
   my ($name, $at, $scaled) = @_;
   if ($name =~ /^$FONTREGEXP$/o) {
-    my %props;
+    my %props = (series => 'medium', shape => 'upright', encoding => 'OT1');
     my ($fam, $ser, $shp, $size) = ($1, $2, $3, $4);
     if (my $ffam = lookupFontFamily($fam)) { map { $props{$_} = $$ffam{$_} } keys %$ffam; }
     if (my $fser = lookupFontSeries($ser)) { map { $props{$_} = $$fser{$_} } keys %$fser; }
     if (my $fsh  = lookupFontShape($shp))  { map { $props{$_} = $$fsh{$_} } keys %$fsh; }
-    $size = 1 unless $size;    # Yes, also if 0, "" (from regexp)
-    $size = $at if defined $at;
-    $size *= $scaled if defined $scaled;
+    $size        = 1 unless $size;    # Yes, also if 0, "" (from regexp)
+    $size        = $at             if defined $at;
+    $size        = $size * $scaled if defined $scaled;
+    $props{name} = $name;
     $props{size} = $size;
-    # Experimental Hack !?!?!?
-    $props{encoding} = 'OT1' unless defined $props{encoding};
-    $props{at}       = $at . "pt" if defined $at;
     return %props; }
   else {
-    return; } }
+    Info('unrecognized', 'font', undef, "Unrecognized fontname '$name'");
+    return (family => $name, size => DEFSIZE()); } }
 
 sub lookupTeXFont {
   my ($fontname, $seriescode, $shapecode) = @_;
@@ -241,7 +274,7 @@ sub textDefault {
 sub mathDefault {
   my ($self) = @_;
   return $self->new_internal('math', $DEFSERIES, 'italic', DEFSIZE(),
-    $DEFCOLOR, $DEFBACKGROUND, $DEFOPACITY, undef, $DEFLANGUAGE, 'text', 0); }
+    $DEFCOLOR, $DEFBACKGROUND, $DEFOPACITY, 'OT1', $DEFLANGUAGE, 'text', 0); }
 
 # Accessors
 # Using an array here is getting ridiculous!
@@ -263,8 +296,10 @@ sub toString {
 
 # Perhaps it is more useful to list only the non-default components?
 sub stringify {
+  no warnings 'recursion';
   my ($self) = @_;
   my ($fam, $ser, $shp, $siz, $col, $bkg, $opa, $enc, $lang, $mstyle, $flags) = @$self;
+  # !!!!!
   $fam = 'serif' if $fam && ($fam eq 'math');
   return 'Font[' . join(',', map { Stringify($_) } grep { $_ }
       (isDiff($fam, $DEFFAMILY)   ? ($fam)    : ()),
@@ -278,6 +313,16 @@ sub stringify {
     ($flags                       ? ($flags)  : ()),
     )
     . ']'; }
+
+# Return a Fontinfo-like hash
+# Eventually a more integrated representation of Fonts that accommodates
+# both low-level TeX-like commands, and higher-level CSS-like ones.
+sub asFontinfo {
+  my ($self) = @_;
+  my ($fam, $ser, $shp, $siz, $col, $bkg, $opa, $enc, $lang, $mstyle, $flags) = @$self;
+  return { family => $fam, series => $ser, shape => $shp, size => $siz,
+    color    => $col,          background => $bkg,  opacity   => $opa,
+    encoding => $enc || 'OT1', language   => $lang, mathstyle => $mstyle }; }
 
 sub equals {
   my ($self, $other) = @_;
@@ -327,6 +372,7 @@ sub relativeTo {
   my ($self, $other) = @_;
   my ($fam,  $ser,  $shp,  $siz,  $col,  $bkg,  $opa,  $enc,  $lang,  $mstyle,  $flags)  = @$self;
   my ($ofam, $oser, $oshp, $osiz, $ocol, $obkg, $oopa, $oenc, $olang, $omstyle, $oflags) = @$other;
+  # !!!!
   $fam  = 'serif' if $fam  && ($fam eq 'math');
   $ofam = 'serif' if $ofam && ($ofam eq 'math');
 ##  my $emph = 0;
@@ -356,6 +402,9 @@ sub relativeTo {
       : ()),
     (isDiff($opa, $oopa)
       ? (opacity => { value => $opa, properties => { opacity => $opa } })
+      : ()),
+    (isDiff($enc, $oenc)
+      ? (encoding => { value => $enc, properties => { encoding => $enc } })
       : ()),
     (isDiff($lang, $olang)
       ? ('xml:lang' => { value => $lang, properties => { language => $lang } })

@@ -98,8 +98,8 @@ sub digestNextBody {
 
   while (defined($token = $$self{gullet}->getPendingComment || $$self{gullet}->readXToken(1))) {
     if ($alignment && scalar(@LaTeXML::LIST) && (Equals($token, T_ALIGN) ||
-        Equals($token, T_CS('\cr')) || Equals($token, T_CS('\hidden@cr')) ||
-        Equals($token, T_CS('\hidden@crcr')))) {
+        Equals($token, T_CS('\cr')) || Equals($token, T_CS('\lx@hidden@cr')) ||
+        Equals($token, T_CS('\lx@hidden@crcr')))) {
       # at least \over calls in here without the intent to passing through the alignment.
       # So if we already have some digested boxes available, return them here.
       $$self{gullet}->unread($token);
@@ -213,7 +213,7 @@ INVOKE:
 
 sub makeMisdefinedError {
   my (@objects) = @_;
-  return LaTeXML::Core::Whatsit->new($STATE->lookupDefinition(T_CS('\@ERROR')),
+  return LaTeXML::Core::Whatsit->new($STATE->lookupDefinition(T_CS('\lx@ERROR')),
     ['misdefined', join('', map { ToString($_); } @objects)],
     font => $STATE->lookupValue('font'),
   ); }
@@ -242,8 +242,13 @@ sub invokeToken_simple {
     return LaTeXML::Core::Comment->new($comment); }
   else {
     $STATE->clearPrefixes;                          # prefixes shouldn't apply here.
-    return Box(LaTeXML::Package::FontDecodeString($meaning->toString, undef, 1),
-      undef, undef, $meaning); } }
+    if (my $mathcode = $STATE->lookupValue('IN_MATH')
+      && $STATE->lookupMathcode($meaning->toString)) {
+      my ($glyph, $f, $reversion, %props) = LaTeXML::Package::decodeMathChar($mathcode, $meaning);
+      return Box($glyph, $f, undef, $reversion, %props); }
+    else {
+      return Box(LaTeXML::Package::FontDecodeString($meaning->toString, undef, 1),
+        undef, undef, $meaning); } } }
 
 # Regurgitate: steal the previously digested boxes from the current level.
 sub regurgitate {
@@ -312,11 +317,6 @@ sub currentFrameMessage {
 sub bgroup {
   my ($self) = @_;
   pushStackFrame($self, 0);
-  # NOTE: This is WRONG; should really only track "scanned" (not digested) braces
-  # Alas, there're too many code structuring differences between TeX and LaTeXML
-  # to find all the places to manage it.
-  # So, let's try this for now...
-  $LaTeXML::ALIGN_STATE++;
   return; }
 
 sub egroup {
@@ -327,7 +327,6 @@ sub egroup {
       currentFrameMessage($self)); }
   else {                                        # Don't pop if there's an error; maybe we'll recover?
     popStackFrame($self, 0); }
-  $LaTeXML::ALIGN_STATE--;
   return; }
 
 sub begingroup {
@@ -365,10 +364,13 @@ sub setMode {
     # and save the text font for any embedded text.
     $STATE->assignValue(savedfont         => $curfont, 'local');
     $STATE->assignValue(script_base_level => scalar(@{ $$self{boxing} }));    # See getScriptLevel
-    $STATE->assignValue(font => $STATE->lookupValue('mathfont')->merge(
-        color     => $curfont->getColor, background => $curfont->getBackground,
-        size      => $curfont->getSize,
-        mathstyle => ($mode =~ /^display/ ? 'display' : 'text')), 'local'); }
+    my $mathfont = $STATE->lookupValue('mathfont')->merge(
+      color     => $curfont->getColor, background => $curfont->getBackground,
+      size      => $curfont->getSize,
+      mathstyle => ($mode =~ /^display/ ? 'display' : 'text'));
+    $STATE->assignValue(font              => $mathfont, 'local');
+    $STATE->assignValue(initial_math_font => $mathfont, 'local');
+    $STATE->assignValue(fontfamily        => -1,        'local'); }
   else {
     # When entering text mode, we should set the font to the text font in use before the math
     # but inherit color and size

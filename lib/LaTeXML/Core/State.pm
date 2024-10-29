@@ -123,6 +123,16 @@ sub new {
   $$self{uccode}              = {};
   $$self{delcode}             = {};
   $$self{tracing_definitions} = {};
+  # Initializations that INITEX would have set.
+  for (my $c = ord('0') ; $c <= ord('9') ; $c++) {
+    $$self{mathcode}{ chr($c) } = [0x7000 + $c]; }
+  for (my $c = ord('a') ; $c <= ord('z') ; $c++) {
+    my $C = $c + ord('A') - ord('a');
+    $$self{mathcode}{ chr($c) } = [0x7100 + $c];
+    $$self{mathcode}{ chr($C) } = [0x7100 + $C];
+    $$self{uccode}{ chr($c) }   = [$C];
+    $$self{lccode}{ chr($C) }   = [$c];
+    $$self{sfcode}{ chr($C) }   = [999]; }
   return $self; }
 
 sub assign_internal {
@@ -411,6 +421,7 @@ sub lookupExpandable {
   return unless $token;
   my $defn;
   my $entry;
+  $toplevel = 1 unless defined $toplevel;    # Default, for full expansion, same as readXToken!
   if ($CATCODE_ACTIVE_OR_CS[$$token[1]]
     && ($entry = $$self{meaning}{ $$token[0] })
     && ($defn  = $$entry[0])

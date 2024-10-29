@@ -923,6 +923,7 @@ my %IS_INFIX = (METARELOP => 1,    # [CONSTANT]
   SUPERSCRIPTOP => 1000, SUBSCRIPTOP => 1000);
 
 sub textrec {
+  no warnings 'recursion';
   my ($node, $outer_bp, $outer_name) = @_;
   return '[missing]' unless defined $node;
   $node = realizeXMNode($node);
@@ -961,6 +962,7 @@ sub textrec {
     return '[' . (p_getValue($node) || '') . ']'; } }
 
 sub textrec_apply {
+  no warnings 'recursion';
   my ($name, $op, @args) = @_;
   my $role = ((ref $op ne 'ARRAY') && $op->getAttribute('role')) || 'Unknown';
   if (($role =~ /^(SUB|SUPER)SCRIPTOP$/) && (($op->getAttribute('scriptpos') || '') =~ /^pre\d+$/)) {
@@ -1008,7 +1010,11 @@ sub is_genuinely_unparsed {
     if (!$node->getAttribute('idref')) {
       return 1; }
     else {
-      return is_genuinely_unparsed(realizeXMNode($node), $document); } }
+      my $real_node = realizeXMNode($node);
+      # Note that some parses fail with an ARRAY ref [ltx:Error,...]
+      # so realizeXMNode may fail!
+      return 1 if (ref $real_node) !~ /^XML::LibXML/;
+      return is_genuinely_unparsed($real_node, $document); } }
   elsif ($tag eq 'ltx:XMDual') {
     my ($content, $presentation) = element_nodes($node);
     return is_genuinely_unparsed($content, $document); }
@@ -1467,6 +1473,7 @@ sub NewList {
 # flattenning portions that have the same operator
 # ie. a + b + c - d  =>  (- (+ a b c) d)
 sub LeftRec {
+  no warnings 'recursion';
   my ($arg1, @more) = @_;
   if (@more) {
     my $op     = shift(@more);

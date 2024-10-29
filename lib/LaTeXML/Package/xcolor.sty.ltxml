@@ -290,7 +290,7 @@ sub DecodeColor {
   my $color_re = qr/($color_expr_re)(($func_expr_re)*)/;
 
   my $color;
-  if ($expression =~ /^$color_re$/) {
+  if ($expression =~ /^$color_re\s*$/) {
     #DG: Dear reader, I present to you: maintenance hell:
     my $prefix     = $2 || $10;
     my $name       = $3 || $11;
@@ -726,8 +726,8 @@ DefConditional('\if@rowcolors', undef);
 RawTeX('\@rowcolorstrue');
 #DefMacroI('\showrowcolors', undef, '\global\@rowcolorstrue');
 #DefMacroI('\hiderowcolors', undef, '\global\@rowcolorsfalse');
-DefMacroI('\showrowcolors', undef, '\hidden@noalign{\global\@rowcolorstrue}');
-DefMacroI('\hiderowcolors', undef, '\hidden@noalign{\global\@rowcolorsfalse}');
+DefMacroI('\showrowcolors', undef, '\lx@hidden@noalign{\global\@rowcolorstrue}');
+DefMacroI('\hiderowcolors', undef, '\lx@hidden@noalign{\global\@rowcolorsfalse}');
 
 DefMacro('\rownum', sub {
     my $alignment = LookupValue('Alignment');

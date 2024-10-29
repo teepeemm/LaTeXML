@@ -84,7 +84,7 @@ sub read {
   # Hmmm, seem to still need it...
   if ($$self{semiverbatim}) {    # Open coded setupCatcodes
     $STATE->beginSemiverbatim(@{ $$self{semiverbatim} }); }
-
+  no warnings 'recursion';
   my $value = &{ $$self{reader} }($gullet, @{ $$self{extra} || [] });
   $value = $value->neutralize(@{ $$self{semiverbatim} }) if $$self{semiverbatim} && (ref $value)
     && $value->can('neutralize');
@@ -126,6 +126,7 @@ sub reparse {
         return $value; }); } }
 
 sub digest {
+  no warnings 'recursion';
   my ($self, $stomach, $value, $fordefn) = @_;
   # If semiverbatim, Expand (before digest), so tokens can be neutralized; BLECH!!!!
   if ($$self{semiverbatim}) {

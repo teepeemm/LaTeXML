@@ -111,7 +111,7 @@ sub canResolveKeyValFor {
 
 # Return the 1st of the keysets, or the 1st one of the KeyVals itself
 sub getPrimaryKeyValOf {
-  my ($self, $key, @keysets) = @_;
+  my ($self, @keysets) = @_;
   return (@keysets ? $keysets[0] : $$self{keysets}[0]); }
 
 #======================================================================
@@ -123,7 +123,7 @@ sub addValue {
 
   # figure out the keyset(s) for the key to be added
   my @keysets = $self->resolveKeyValFor($key);
-  my $pkeyset = $self->getPrimaryKeyValOf($key, @keysets);
+  my $pkeyset = $self->getPrimaryKeyValOf(@keysets);
 
   # and add the new tuple to the set of tuples
   push(@{ $$self{tuples} },
@@ -238,7 +238,7 @@ sub readFrom {
       if ($delim->equals(T_OTHER('='))) {
         $isDefault = 0;
         # setup the key-codes to properly read
-        my $keyset  = $self->getPrimaryKeyValOf($key, $self->resolveKeyValFor($key));
+        my $keyset  = $self->getPrimaryKeyValOf($self->resolveKeyValFor($key));
         my $keytype = keyval_get(keyval_qname($$self{prefix}, $keyset, $key), 'type');
         $keytype->setupCatcodes if $keytype;
         # read until comma
@@ -524,7 +524,7 @@ I<prefix> is the given prefix all key-value pairs operate in and defaults to
 C<'KV'>. If given, prefix should be a string. 
 
 I<keysets> should be a list of keysets to find keys inside of. If given, it
-should either be reference to a list of strings or a comma-seperated string. 
+should either be reference to a list of strings or a comma-separated string. 
 This argument defaults to C<'_anonymous_'>. 
 
 Furthermore, the KeyVals constructor accepts a variety of options that can
@@ -532,7 +532,7 @@ be used to customize its behaviour. These are I<setAll>, I<setInternals>,
 I<skip>, I<skipMissing>, I<hookMissing>, I<open>, I<close>.
 
 I<setAll> is a flag that, if set, ensures that keys will be set in all existing
-keysets, instad of only in the first one. 
+keysets, instead of only in the first one. 
 
 I<setInternals> is a flag that, if set, ensures that certain 'xkeyval' package
 internals are set during key digestion. 
@@ -547,22 +547,8 @@ such a key, if set to C<1> they are ignored. Alternatively, this can be set to a
 key macro which is then extended to contain a comman-separated list of the
 undefined keys. 
 
-I<hookMissing> allows to call a specific macro if a single key is unknown during
+I<hookMissing> allows one to call a specific macro if a single key is unknown during
 key digestion. 
-
-=back
-
-=head2 KeyVals Accessors (intended for internal usage)
-
-=over 4
-
-=item C<< $keyvals->setTuples(@tuples) >>
-
-Sets the I<tuples> which should be a list of five-tuples (array references) representing
-the key-value pairs this KeyVals object is seeded with. See the I<getTuples>
-function on details of the structure of this list. 
-I<rebuild> is called automatically to populate the other caches. 
-Typically, the tuples is set by I<readFrom>.
 
 =back
 
@@ -582,10 +568,10 @@ this function.
 Checks if this I<KeyVals> object can resolve a KeyVal for I<key>. Ignores
 I<setAll> and I<skipMissing> parameters. 
 
-=item C<< my $keyval = $keyvals->getPrimaryKeyValOf($key, @keysets) >>
+=item C<< my $keyval = $keyvals->getPrimaryKeyValOf(@keysets) >>
 
-Gets the primary keyset to be used for interacting a a single I<key>,
-given that it resolves to I<keysets>. Defaults to first keyset in KeyVals, if none given.
+Gets the primary keyset given that it resolves to I<keysets>. 
+Defaults to first keyset in KeyVals, if none given.
 
 =back
 
@@ -695,7 +681,7 @@ sequence of Tokens that was used to be read it from the gullet.
 
 =item C<< $str = $keyvals->toString(); >>
 
-Turns this object into a key=value comma seperated string. 
+Turns this object into a key=value comma separated string. 
 
 =back
 

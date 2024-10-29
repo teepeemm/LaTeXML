@@ -225,14 +225,14 @@ sub handleTemplate {
   local $LaTeXML::CURRENT_TOKEN = $token;
   my $post = $alignment->getColumnAfter;
   $LaTeXML::ALIGN_STATE = 1000000;
-  ### NOTE: Truly fishy smuggling w/ \hidden@cr
+  ### NOTE: Truly fishy smuggling w/ \lx@hidden@cr
   my $arg;
-  if (($type eq 'cr') && $hidden) {    # \hidden@cr gets an argument as payload!!!!!
+  if (($type eq 'cr') && $hidden) {    # \lx@hidden@cr gets an argument as payload!!!!!
     $arg = readArg($self); }
   Debug("Halign $alignment: column after " . ToString($post)) if $LaTeXML::DEBUG{halign};
   if ((($type eq 'cr') || ($type eq 'crcr'))
     && $$alignment{in_row} && !$alignment->currentRow->{pseudorow}) {
-    unshift(@{ $$self{pushback} }, T_CS('\@row@after')); }
+    unshift(@{ $$self{pushback} }, T_CS('\lx@alignment@row@after')); }
   if ($arg) {
     unshift(@{ $$self{pushback} }, T_BEGIN, $arg->unlist, T_END); }
   unshift(@{ $$self{pushback} }, $token);
@@ -241,12 +241,12 @@ sub handleTemplate {
 
 # If it is a column ending token, Returns the token, a keyword and whether it is "hidden"
 our @column_ends = (    # besides T_ALIGN
-  [T_CS('\cr'),           'cr',     0],
-  [T_CS('\crcr'),         'crcr',   0],
-  [T_CS('\hidden@cr'),    'cr',     1],
-  [T_CS('\hidden@crcr'),  'crcr',   1],
-  [T_CS('\hidden@align'), 'insert', 1],
-  [T_CS('\span'),         'span',   0]);
+  [T_CS('\cr'),              'cr',     0],
+  [T_CS('\crcr'),            'crcr',   0],
+  [T_CS('\lx@hidden@cr'),    'cr',     1],
+  [T_CS('\lx@hidden@crcr'),  'crcr',   1],
+  [T_CS('\lx@hidden@align'), 'insert', 1],
+  [T_CS('\span'),            'span',   0]);
 
 sub isColumnEnd {
   my ($self, $token) = @_;
@@ -300,36 +300,52 @@ sub readToken {
       return T_CS('\special_relax'); }
     else {
       last; } }
+  if ($token) {
+    $cc = $$token[1];
+    if    ($cc == CC_BEGIN) { $LaTeXML::ALIGN_STATE++; }
+    elsif ($cc == CC_END)   { $LaTeXML::ALIGN_STATE--; }
+  }
   return $token; }
 
 # Unread tokens are assumed to be not-yet expanded.
 sub unread {
   my ($self, @tokens) = @_;
-  my $r;
-  unshift(@{ $$self{pushback} },
-    map { (!defined $_ ? ()
-        : (($r = ref $_) eq 'LaTeXML::Core::Token' ? $_
-          : ($r eq 'LaTeXML::Core::Tokens' ? @$_
-            : Error('misdefined', $r, undef, "Expected a Token, got " . Stringify($_)) || T_OTHER(Stringify($_))))) }
-      @tokens);
+  my $level = 0;
+  my $pb    = $$self{pushback};
+  while (@tokens) {
+    my $token = pop(@tokens);
+    my $r     = ref $token;
+    if    (!defined $token) { }
+    elsif ($r eq 'LaTeXML::Core::Tokens') {
+      push(@tokens, @$token); }
+    elsif ($r eq 'LaTeXML::Core::Token') {
+      my $cc = $$token[1];
+      if    ($cc == CC_BEGIN) { $level--; }    # Retract scanned braces
+      elsif ($cc == CC_END)   { $level++; }
+      unshift(@$pb, $token); }
+    else {
+      Error('misdefined', $r, undef, "Expected a Token, got " . Stringify($_));
+      unshift(@$pb, T_OTHER($token)); } }
+  $LaTeXML::ALIGN_STATE += $level;
   return; }
 
 # Read the next non-expandable token (expanding tokens until there's a non-expandable one).
 # Note that most tokens pass through here, so be Fast & Clean! readToken is folded in.
 # `Toplevel' processing, (if $toplevel is true), used at the toplevel processing by Stomach,
 #  will step to the next input stream (Mouth) if one is available,
-# $toplevel is doing TWO distinct things. When true:
+# $toplevel when true:
 #  * If a mouth is exhausted, move on to the containing mouth to continue reading
+# $fully_expand when true, OR when undef but $toplevel is true
 #  * expand even protected defns, essentially this means expand "for execution"
 # Note that, unlike readBalanced, this does NOT defer expansion of \the & friends.
 # Also, \noexpand'd tokens effectively act ilke \relax
 # For arguments to \if,\ifx, etc use $for_conditional true,
 # which handles \noexpand and CS which have been \let to tokens specially.
 sub readXToken {
-  my ($self, $toplevel, $for_conditional) = @_;
+  my ($self, $toplevel, $for_conditional, $fully_expand) = @_;
   $toplevel = 1 unless defined $toplevel;
-  my $autoclose      = $toplevel;    # Potentially, these should have distinct controls?
-  my $for_evaluation = $toplevel;
+  my $autoclose = $toplevel;    # Potentially, these should have distinct controls?
+  $fully_expand = $toplevel unless defined $fully_expand;
   my ($token, $cc, $defn, $atoken, $atype, $ahidden);
   while (1) {
     while (($token = shift(@{ $$self{pushback} })) && $CATCODE_HOLD[$cc = $$token[1]]) {
@@ -361,18 +377,20 @@ sub readXToken {
       if ((ref $defn) eq 'LaTeXML::Core::Token') {    # \let to a token? Return it!
         return ($for_conditional ? $defn : $token); }
       elsif (!$defn->isExpandable                     # Not expandable or is protected
-        || ($$defn{isProtected} && !$for_evaluation)) {
+        || ($$defn{isProtected} && !$fully_expand)) {
         return $token; }
       else {
         local $LaTeXML::CURRENT_TOKEN = $token;
         no warnings 'recursion';
         my $expansion = $defn->invoke($self);
         # add the newly expanded tokens back into the gullet stream, in the ordinary case.
-        unshift(@{ $$self{pushback} }, @$expansion) if $expansion; } }
+        unread($self, $expansion) if $expansion; } }
     elsif ($$token[1] == CC_CS && !(defined $defn)) {
       $STATE->generateErrorStub($self, $token);       # cs SHOULD have defn by now; report early!
       return $token; }
     else {
+      if    ($cc == CC_BEGIN) { $LaTeXML::ALIGN_STATE++; }
+      elsif ($cc == CC_END)   { $LaTeXML::ALIGN_STATE--; }
       return $token; }                                # just return it
   }
   return; }                                           # never get here.
@@ -380,7 +398,8 @@ sub readXToken {
 # readBalanced approximates TeX's scan_toks (but doesn't parse \def parameter lists)
 # and only optionally requires the openning "{".
 # It may return comments in the token lists.
-# it optionally ($expand) expands while reading, but deferring \the and related.
+# If $expanded is true, it expands while reading, but deferring \the and related
+# & \protected, unless $expanded is > 1.
 # The $macrodef flag affects whether # parameters are "packed" for macro bodies.
 # If $require_open is true, the opening T_BEGIN has not yet been read, and is required.
 our $DEFERRED_COMMANDS = {
@@ -392,12 +411,14 @@ our $DEFERRED_COMMANDS = {
 
 sub readBalanced {
   my ($self, $expanded, $macrodef, $require_open) = @_;
+  $LaTeXML::ALIGN_STATE-- unless $require_open;    # assume matching } [BEFORE masking ALIGN_STATE]
   local $LaTeXML::ALIGN_STATE = 1000000;
-  my $startloc = ($$self{verbosity} > 0) && getLocator($self);
+  my $fully_expand = (defined $expanded)     && ($expanded > 1);
+  my $startloc     = ($$self{verbosity} > 0) && getLocator($self);
   # Does we need to expand to get the { ???
   if ($require_open) {
     my $token = ($expanded ? readXToken($self, 0) : readToken($self));
-    if ((!$token) || ($$token[1] != CC_BEGIN)) {
+    if ((!$token) || ($$token[1] != CC_BEGIN && !Equals($STATE->lookupMeaning($token), T_BEGIN))) {
       Error('expected', '{', $self, "Expected opening '{'");
       return TokensI(); } }
   my @tokens = ();
@@ -423,11 +444,13 @@ sub readBalanced {
     elsif (($cc == CC_CS) && ($$token[0] eq '\dont_expand')) {
       push(@tokens, readToken($self)); }    # Pass on NEXT token, unchanged.
     elsif ($cc == CC_END) {
+      $LaTeXML::ALIGN_STATE--;
       $level--;
       if (!$level) {
         last; }
       push(@tokens, $token); }
     elsif ($cc == CC_BEGIN) {
+      $LaTeXML::ALIGN_STATE++;
       $level++;
       push(@tokens, $token); }
     ## Wow!!!!! See TeX the Program \S 309
@@ -442,7 +465,7 @@ sub readBalanced {
       && defined($defn = $STATE->lookupMeaning($token))
       && ((ref $defn) ne 'LaTeXML::Core::Token')    # an actual definition
       && $defn->isExpandable
-      && (!$$defn{isProtected})) {                  # is this the right logic here? don't expand unless di
+      && (!$$defn{isProtected} || $fully_expand)) { # is this the right logic here? don't expand unless di
       local $LaTeXML::CURRENT_TOKEN = $token;
       my $r;
       no warnings 'recursion';
@@ -450,7 +473,7 @@ sub readBalanced {
       next unless $expansion;
       # If a special \the type command, push the expansion directly into the result
       # Well, almost directly: handle any MARKER tokens now, and possibly un-pack T_PARAM
-      if ($$DEFERRED_COMMANDS{ $$defn{cs}[0] }) {
+      if (!$fully_expand && $$DEFERRED_COMMANDS{ $$defn{cs}[0] }) {
         foreach my $t (@$expansion) {
           my $cc = $$t[1];
           if    ($cc == CC_MARKER) { handleMarker($self, $t); }
@@ -460,7 +483,7 @@ sub readBalanced {
             push(@tokens, $t); } }
       }
       else {    # otherwise, prepend to pushback to be expanded further.
-        unshift(@{ $$self{pushback} }, @$expansion); } }
+        unread($self, $expansion) if $expansion; } }
     else {
       if ($expanded && ($$token[1] == CC_CS) && !(defined $defn)) {
         $STATE->generateErrorStub($self, $token); }    # cs SHOULD have defn by now; report early!
@@ -520,7 +543,7 @@ sub readXNonSpace {
 sub skipSpaces {
   my ($self) = @_;
   my $tok = readNonSpace($self);
-  unshift(@{ $$self{pushback} }, $tok) if defined $tok;    # Unread
+  unread($self, $tok) if defined $tok;
   return; }
 
 # Skip one space
@@ -528,26 +551,23 @@ sub skipSpaces {
 sub skip1Space {
   my ($self, $expanded) = @_;
   my $token = ($expanded ? readXToken($self) : readToken($self));
-  unshift(@{ $$self{pushback} }, $token) if $token && !$token->defined_as(T_SPACE);
+  unread($self, $token) if $token && !$token->defined_as(T_SPACE);
   return; }
 
 # <filler> = <optional spaces> | <filler>\relax<optional spaces>
+# TeX Book p.276 "<left brace> can be implicit", and experimentation, indicate Expansion!!!
 sub skipFiller {
   my ($self) = @_;
-  while (1) {
-    my $tok = readNonSpace($self);
-    return unless defined $tok;
-    # Should \foo work too (where \let\foo\relax) ??
-    if (!$tok->equals(T_CS('\relax'))) {
-      unshift(@{ $$self{pushback} }, $tok);    # Unread
-      return; }
-  }
+  while (my $tok = readXNonSpace($self)) {
+    if (!$tok->defined_as(T_CS('\relax'))) {
+      unread($self, $tok);
+      return; } }
   return; }
 
 sub ifNext {
   my ($self, $token) = @_;
   if (my $tok = readToken($self)) {
-    unshift(@{ $$self{pushback} }, $tok);    # Unread
+    unread($self, $tok);
     return $tok->equals($token); }
   else { return 0; } }
 
@@ -564,10 +584,9 @@ sub readMatch {
       if ($$token[1] == CC_SPACE) {    # If this was space, SKIP any following!!!
         while (defined($token = readToken($self)) && ($$token[1] == CC_SPACE)) {
           push(@matched, $token); }
-        unshift(@{ $$self{pushback} }, $token) if $token; }    # Unread
-    }
-    return $choice unless @tomatch;                            # All matched!!!
-    unshift(@{ $$self{pushback} }, @matched);                  # Put 'em back and try next!
+        unread($self, $token) if defined $token; } }
+    return $choice unless @tomatch;    # All matched!!!
+    unread($self, @matched);           # Put 'em back and try next!
   }
   return; }
 
@@ -585,9 +604,8 @@ sub readKeyword {
     while (@tomatch && defined($tok = readXToken($self, 0)) && push(@matched, $tok)
       && (uc($$tok[0]) eq $tomatch[0])) {
       shift(@tomatch); }
-    return $keyword unless @tomatch;             # All matched!!!
-    unshift(@{ $$self{pushback} }, @matched);    # Put 'em back and try next!
-  }
+    return $keyword unless @tomatch;    # All matched!!!
+    unread($self, @matched); }          # Put 'em back tand try next!
   return; }
 
 # Return a (balanced) sequence tokens until a match against one of the Tokens in @delims.
@@ -603,9 +621,7 @@ sub readUntil {
   my $ntomatch = scalar(@want);
   if ($ntomatch == 1) {    # Common, easy case: read till we match a single token
     my $want = $want[0];
-    #    while(($token = readToken($self)) && !$token->equals($want)){
-    while (($token = shift(@{ $$self{pushback} }) || $$self{mouth}->readToken())
-      && !$token->equals($want)) {
+    while (($token = readToken($self)) && !$token->equals($want)) {
       my $cc = $$token[1];
       if ($cc == CC_MARKER) {    # would have been handled by readToken, but we're bypassing
         handleMarker($self, $token); }
@@ -647,6 +663,7 @@ sub readUntilBrace {
   my $token;
   while (defined($token = readToken($self))) {
     if ($$token[1] == CC_BEGIN) {    # INLINE Catcode
+      $LaTeXML::ALIGN_STATE--;
       unshift(@{ $$self{pushback} }, $token);    # Unread
       last; }
     push(@tokens, $token); }
@@ -681,14 +698,19 @@ sub readCSName {
 #  tokens, non-expandable tokens, args, Numbers, ...
 #**********************************************************************
 sub readArg {
-  my ($self) = @_;
+  my ($self, $expanded) = @_;
   my $token = readNonSpace($self);
   if (!defined $token) {
     return; }
   elsif ($$token[1] == CC_BEGIN) {    # Inline ->getCatcode!
-    return readBalanced($self, 0); }
+    return readBalanced($self, $expanded, 0, 0); }
   else {
-    return Tokens($token); } }
+    if ($expanded) {
+      return $self->readingFromMouth(LaTeXML::Core::Mouth->new(), sub {
+          $self->unread(T_BEGIN, $token, T_END);
+          return $self->readBalanced($expanded, 0, 1); }); }
+    else {
+      return Tokens($token); } } }
 
 # Note that this returns an empty array if [] is present,
 # otherwise $default or undef.
@@ -700,7 +722,7 @@ sub readOptional {
   elsif (($tok->equals(T_OTHER('[')))) {
     return readUntil($self, T_OTHER(']')); }
   else {
-    unshift(@{ $$self{pushback} }, $tok);    # Unread
+    unread($self, $tok);
     return $default; } }
 
 #**********************************************************************
@@ -752,7 +774,7 @@ sub readRegisterValue {
     else {
       return &$coercer($sign * $value->valueOf); } }
   else {
-    unshift(@{ $$self{pushback} }, $token);    # Unread
+    unread($self, $token);
     return; } }
 
 # Apparent behaviour of a token value (ie \toks#=<arg>)
@@ -791,7 +813,7 @@ sub readOptionalSigns {
   while (defined($t = readXToken($self))
     && (($$t[0] eq '+') || ($$t[0] eq '-') || $t->defined_as(T_SPACE))) {
     $sign = -$sign if ($$t[0] eq '-'); }
-  unshift(@{ $$self{pushback} }, $t) if $t;    # Unread
+  unread($self, $t) if $t;
   return $sign; }
 
 # Read digits (within $range), while expanding and if $skip, skip <one optional space> (expanded!)
@@ -801,7 +823,7 @@ sub readDigits {
   my ($token, $digit);
   while (($token = readXToken($self)) && (($digit = $$token[0]) =~ /^[$range]$/)) {
     $string .= $digit; }
-  unshift(@{ $$self{pushback} }, $token) if $token && !($skip && $token->defined_as(T_SPACE)); #Inline
+  unread($self, $token) if $token && !($skip && $token->defined_as(T_SPACE));    #Inline
   return $string; }
 
 # <factor> = <normal integer> | <decimal constant>
@@ -815,10 +837,10 @@ sub readFactor {
     $string .= '.' . readDigits($self, '0-9');
     $token = readXToken($self); }
   if (length($string) > 0) {
-    unshift(@{ $$self{pushback} }, $token) if $token && $$token[1] != CC_SPACE; # Inline ->getCatcode, unread
+    unread($self, $token) if $token && $$token[1] != CC_SPACE;
     return $string; }
   else {
-    unshift(@{ $$self{pushback} }, $token);                                     # Unread
+    unread($self, $token);
     my $n = readNormalInteger($self);
     return (defined $n ? $n->valueOf : undef); } }
 
@@ -836,7 +858,7 @@ sub readNumber {
   elsif (defined($n = readRegisterValue($self, 'Number', $s, 1))) { return $n; }
   else {
     my $next = readToken($self);
-    unshift(@{ $$self{pushback} }, $next);    # Unread
+    unread($self, $next);
     Warn('expected', '<number>', $self, "Missing number, treated as zero",
       "while processing " . ToString($LaTeXML::CURRENT_TOKEN), showUnexpected($self));
     return Number(0); } }
@@ -863,7 +885,7 @@ sub readNormalInteger {
     skip1Space($self, 1);
     return Number(ord($s)); }    # Only a character token!!! NOT expanded!!!!
   else {
-    unshift(@{ $$self{pushback} }, $token);    # Unread
+    unread($self, $token);
     return readRegisterValue($self, 'Number'); } }
 
 #======================================================================
@@ -880,10 +902,10 @@ sub readFloat {
     $token = readXToken($self); }
   my $n;
   if (length($string) > 0) {
-    unshift(@{ $$self{pushback} }, $token) if $token && $$token[1] != CC_SPACE; # Inline ->getCatcode, unread
+    unread($self, $token) if $token && $$token[1] != CC_SPACE;
     $n = $string; }
   else {
-    unshift(@{ $$self{pushback} }, $token) if $token;                           # Unread
+    unread($self, $token) if $token;
     $n = readNormalInteger($self);
     $n = $n->valueOf if defined $n; }
   return (defined $n ? Float($s * $n) : undef); }
@@ -1112,21 +1134,27 @@ Returns an object describing the current location in the input stream.
 
 =over 4
 
-=item C<< $tokens = $gullet->expandTokens($tokens); >>
-
-Return the L<LaTeXML::Core::Tokens> resulting from expanding all the tokens in C<$tokens>.
-This is actually only used in a few circumstances where the arguments to
-an expandable need explicit expansion; usually expansion happens at the right time.
-
 =item C<< $token = $gullet->readToken; >>
 
 Return the next token from the input source, or undef if there is no more input.
 
-=item C<< $token = $gullet->readXToken($toplevel,$commentsok); >>
+=item C<< $token = $gullet->readXToken($toplevel,$for_conditional, $fully_expand); >>
 
 Return the next unexpandable token from the input source, or undef if there is no more input.
-If the next token is expandable, it is expanded, and its expansion is reinserted into the input.
-If C<$commentsok>, a comment read or pending will be returned.
+If the next token is expandable, it is expanded, and its expansion is reinserted into the input,
+and reading continues.
+If C<$toplevel> is true, it will automatically close empty mouths as it reads, and will also fully expand macros (unless overridden by C<$fully_expand> being explicitly false). Full expansion expands protected macros as well as the results of L<\the> (and similar).
+If C<$for_conditional> is true, handle L<\noexpand> appropriately for the arguments to L<\if>.
+
+=item C<< $tokens = $gullet->readBalanced($expanded, $macrodef, $require_open); >>
+
+Read a sequence of tokens from the input until the balancing '}'.
+By default assumes the '{' has already been read.
+
+No expansion takes place if C<$expand> is 0 or undef; partial expansion (deferring protected and C<\the>) of C<$expand> is 1; full expansion if it is > 1.
+The C<$macrodef> flag affects whether # parameters are "packed" for macro bodies.
+If C<$require_open> is true, the opening C<T_BEGIN> has not yet been read, and is required.
+Returns a L<LaTeXML::Core::Tokens>.
 
 =item C<< $gullet->unread(@tokens); >>
 
@@ -1142,6 +1170,11 @@ Push the C<@tokens> back into the input stream to be re-read.
 
 Read and return the next non-space token from the input after discarding any spaces.
 
+=item C<< $token = $gullet->readXNonSpace; >>
+
+Read and return the next non-space token from the input after discarding any spaces,
+partially expanding as it goes.
+
 =item C<< $gullet->skipSpaces; >>
 
 Skip the next spaces from the input.
@@ -1150,12 +1183,6 @@ Skip the next spaces from the input.
 
 Skip the next token from the input if it is a space.
 If C($expanded> is true, expands ( like C< <one optional space> > ).
-
-=item C<< $tokens = $gullet->readBalanced; >>
-
-Read a sequence of tokens from the input until the balancing '}' (assuming the '{' has
-already been read). Returns a L<LaTeXML::Core::Tokens>,
-except in an array context, returns the collected tokens and the closing token.
 
 =item C<< $boole = $gullet->ifNext($token); >>
 
@@ -1185,9 +1212,12 @@ in C<@delims>.  In a list context, it also returns which of the delimiters ended
 
 =over 4
 
-=item C<< $tokens = $gullet->readArg; >>
+=item C<< $tokens = $gullet->readArg($expanded); >>
 
-Read and return a TeX argument; the next Token or Tokens (if surrounded by braces).
+Read and return a "normal" TeX argument; the next Token or Tokens (if surrounded by braces).
+C<$expanded> controls expansion as if the argument were read and then expanded in isolation:
+0,undef or missing gives no expansion; 1 gives partial expansion; > 1 gives full expansion.
+In the case of a single unbraced expandable token, it will I<not> read any macro arguments from the following input!
 
 =item C<< $tokens = $gullet->readOptional($default); >>
 

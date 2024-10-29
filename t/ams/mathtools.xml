@@ -1865,7 +1865,7 @@ Then a switch of tag forms.</p>
                 </XMApp>
               </XMApp>
               <XMWrap>
-                <XMTok role="OPEN" stretchy="true">‖</XMTok>
+                <XMTok name="||" role="OPEN" stretchy="true">‖</XMTok>
                 <XMArray xml:id="S4.Ex30.m1.1">
                   <XMRow>
                     <XMCell align="center">
@@ -1904,7 +1904,7 @@ Then a switch of tag forms.</p>
                     </XMCell>
                   </XMRow>
                 </XMArray>
-                <XMTok role="CLOSE" stretchy="true">‖</XMTok>
+                <XMTok name="||" role="CLOSE" stretchy="true">‖</XMTok>
               </XMWrap>
             </XMDual>
           </XMath>
@@ -2070,7 +2070,7 @@ Then a switch of tag forms.</p>
                   </XMApp>
                 </XMApp>
                 <XMWrap>
-                  <XMTok role="OPEN" stretchy="true">‖</XMTok>
+                  <XMTok name="||" role="OPEN" stretchy="true">‖</XMTok>
                   <XMArray xml:id="S4.Ex33.m1.1">
                     <XMRow>
                       <XMCell align="center">
@@ -2095,7 +2095,7 @@ Then a switch of tag forms.</p>
                       </XMCell>
                     </XMRow>
                   </XMArray>
-                  <XMTok role="CLOSE" stretchy="true">‖</XMTok>
+                  <XMTok name="||" role="CLOSE" stretchy="true">‖</XMTok>
                 </XMWrap>
               </XMDual>
               <XMDual>
@@ -2107,7 +2107,7 @@ Then a switch of tag forms.</p>
                   </XMApp>
                 </XMApp>
                 <XMWrap>
-                  <XMTok role="OPEN" stretchy="true">‖</XMTok>
+                  <XMTok name="||" role="OPEN" stretchy="true">‖</XMTok>
                   <XMArray xml:id="S4.Ex33.m1.2">
                     <XMRow>
                       <XMCell align="right">
@@ -2132,7 +2132,7 @@ Then a switch of tag forms.</p>
                       </XMCell>
                     </XMRow>
                   </XMArray>
-                  <XMTok role="CLOSE" stretchy="true">‖</XMTok>
+                  <XMTok name="||" role="CLOSE" stretchy="true">‖</XMTok>
                 </XMWrap>
               </XMDual>
             </XMApp>
@@ -2248,7 +2248,7 @@ Then a switch of tag forms.</p>
                   </XMApp>
                 </XMApp>
                 <XMWrap>
-                  <XMTok role="OPEN" stretchy="true">‖</XMTok>
+                  <XMTok name="||" role="OPEN" stretchy="true">‖</XMTok>
                   <XMArray xml:id="S4.Ex35.m1.1">
                     <XMRow>
                       <XMCell align="center">
@@ -2280,7 +2280,7 @@ Then a switch of tag forms.</p>
                       </XMCell>
                     </XMRow>
                   </XMArray>
-                  <XMTok role="CLOSE" stretchy="true">‖</XMTok>
+                  <XMTok name="||" role="CLOSE" stretchy="true">‖</XMTok>
                 </XMWrap>
               </XMDual>
               <XMDual>
@@ -2292,7 +2292,7 @@ Then a switch of tag forms.</p>
                   </XMApp>
                 </XMApp>
                 <XMWrap>
-                  <XMTok role="OPEN" stretchy="true">‖</XMTok>
+                  <XMTok name="||" role="OPEN" stretchy="true">‖</XMTok>
                   <XMArray xml:id="S4.Ex35.m1.2">
                     <XMRow>
                       <XMCell align="right">
@@ -2324,7 +2324,7 @@ Then a switch of tag forms.</p>
                       </XMCell>
                     </XMRow>
                   </XMArray>
-                  <XMTok role="CLOSE" stretchy="true">‖</XMTok>
+                  <XMTok name="||" role="CLOSE" stretchy="true">‖</XMTok>
                 </XMWrap>
               </XMDual>
             </XMApp>
@@ -2440,7 +2440,7 @@ Then a switch of tag forms.</p>
                   </XMApp>
                 </XMApp>
                 <XMWrap>
-                  <XMTok role="OPEN" stretchy="true">‖</XMTok>
+                  <XMTok name="||" role="OPEN" stretchy="true">‖</XMTok>
                   <XMArray xml:id="S4.Ex37.m1.1">
                     <XMRow>
                       <XMCell align="left">
@@ -2472,7 +2472,7 @@ Then a switch of tag forms.</p>
                       </XMCell>
                     </XMRow>
                   </XMArray>
-                  <XMTok role="CLOSE" stretchy="true">‖</XMTok>
+                  <XMTok name="||" role="CLOSE" stretchy="true">‖</XMTok>
                 </XMWrap>
               </XMDual>
               <XMDual>
@@ -2484,7 +2484,7 @@ Then a switch of tag forms.</p>
                   </XMApp>
                 </XMApp>
                 <XMWrap>
-                  <XMTok role="OPEN" stretchy="true">‖</XMTok>
+                  <XMTok name="||" role="OPEN" stretchy="true">‖</XMTok>
                   <XMArray xml:id="S4.Ex37.m1.2">
                     <XMRow>
                       <XMCell align="right">
@@ -2516,7 +2516,7 @@ Then a switch of tag forms.</p>
                       </XMCell>
                     </XMRow>
                   </XMArray>
-                  <XMTok role="CLOSE" stretchy="true">‖</XMTok>
+                  <XMTok name="||" role="CLOSE" stretchy="true">‖</XMTok>
                 </XMWrap>
               </XMDual>
             </XMApp>
@@ -6464,7 +6464,7 @@ Then a switch of tag forms.</p>
                     <XMApp>
                       <XMTok role="SUPERSCRIPTOP" scriptpos="post1"/>
                       <XMTok font="italic" role="UNKNOWN">y</XMTok>
-                      <XMTok fontsize="70%" meaning="times" role="MULOP">*</XMTok>
+                      <XMTok fontsize="70%" meaning="times" role="MULOP">∗</XMTok>
                     </XMApp>
                   </XMApp>
                 </XMApp>
@@ -6487,7 +6487,7 @@ Then a switch of tag forms.</p>
                         <XMApp>
                           <XMTok role="SUPERSCRIPTOP" scriptpos="post1"/>
                           <XMTok font="italic" role="UNKNOWN">y</XMTok>
-                          <XMTok fontsize="70%" meaning="times" role="MULOP">*</XMTok>
+                          <XMTok fontsize="70%" meaning="times" role="MULOP">∗</XMTok>
                         </XMApp>
                       </XMApp>
                     </XMApp>
@@ -7120,7 +7120,7 @@ Then a switch of tag forms.</p>
     <title><tag close=" ">11</tag>Stepped lines</title>
     <para xml:id="S11.p1">
       <equation xml:id="S11.Ex81">
-        <Math class="ltx_math_unparsed" mode="display" tex="\begin{gathered}x=1,\quad x+1=2\\&#10;y=2\end{gathered}" text="[1*  ]@x@=@1@,@quad@x@+@1@=@2@[ over]@[2*  ]@y@=@2@[ over]" xml:id="S11.Ex81.m1">
+        <Math class="ltx_math_unparsed" mode="display" tex="\begin{gathered}x=1,\quad x+1=2\\&#10;y=2\end{gathered}" text="[1∗  ]@x@=@1@,@quad@x@+@1@=@2@[ over]@[2∗  ]@y@=@2@[ over]" xml:id="S11.Ex81.m1">
           <XMath>
             <XMDual>
               <XMWrap rule="Anything,">
@@ -7152,7 +7152,7 @@ Then a switch of tag forms.</p>
                           <XMTok meaning="times" role="MULOP">⁢</XMTok>
                           <XMText xml:id="S11.Ex81.m1.1"><text width="0.0pt">1</text><Math mode="inline" tex="*" text="*" xml:id="S11.Ex81.m1.m1">
                               <XMath>
-                                <XMTok meaning="times" role="MULOP">*</XMTok>
+                                <XMTok meaning="times" role="MULOP">∗</XMTok>
                               </XMath>
                             </Math>  </XMText>
                           <XMTok font="italic" role="UNKNOWN" xml:id="S11.Ex81.m1.2">x</XMTok>
@@ -7184,7 +7184,7 @@ Then a switch of tag forms.</p>
                         <XMTok meaning="times" role="MULOP">⁢</XMTok>
                         <XMText xml:id="S11.Ex81.m1.12"><text width="0.0pt">2</text><Math mode="inline" tex="*" text="*" xml:id="S11.Ex81.m1.m2">
                             <XMath>
-                              <XMTok meaning="times" role="MULOP">*</XMTok>
+                              <XMTok meaning="times" role="MULOP">∗</XMTok>
                             </XMath>
                           </Math>  </XMText>
                         <XMTok font="italic" role="UNKNOWN" xml:id="S11.Ex81.m1.13">y</XMTok>
