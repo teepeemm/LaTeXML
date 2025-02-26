@@ -51,6 +51,7 @@ use Unicode::Normalize;
 use LaTeXML::Util::Unicode;
 use Text::Balanced;
 use Text::Unidecode;
+use Encode;
 use base qw(Exporter);
 our @EXPORT = (qw(&DefAutoload &DefExpandable
     &DefMacro &DefMacroI
@@ -163,6 +164,8 @@ sub coerceCS {
   if    (ref $cs) { }
   elsif ($cs =~ s/^\\csname\s+(.*)\\endcsname//) {
     $cs = T_CS('\\' . $1); }
+  elsif (length($cs) == 1) {    # Match an active char
+    ($cs) = TokenizeInternal($cs)->unlist; }
   else {
     $cs = T_CS($cs); }
   return $cs; }
@@ -592,16 +595,20 @@ our %allocations = (
   '\box'   => '\count14', '\toks'  => '\count15');
 
 sub allocateRegister {
-  my ($type) = @_;
+  my ($type, $cs) = @_;
   if (my $addr = $allocations{$type}) {    # $addr is a Register but MUST be stored as \count<#>
     if (my $n = $STATE->lookupValue($addr)) {
       my $next = $n->valueOf + 1;
+      my $loc  = $type . $next;
+      while ($STATE->isValueBound($loc)) {
+        $next++; $loc = $type . $next; }
       $STATE->assignValue($addr => Number($next), 'global');
-      return $type . $next; }
-    else {                                 # If allocations not set up, punt to unallocated register
+      return $loc; }
+    else {    # If allocations not set up, punt to unallocated register
       return; } }
   else {
-    Error('misdefined', $type, undef, "Type $type is not an allocated register type");
+    Error('misdefined', $type, undef,
+      "Type $type is not an allocated register type, for " . ToString($cs));
     return; } }
 
 #======================================================================
@@ -633,8 +640,19 @@ sub NewCounter {
   my $unctr = "UN$ctr";    # UNctr is counter for generating ID's for UN-numbered items.
   if ($within && ($within ne 'document') && !LookupDefinition(T_CS("\\c\@$within"))) {
     NewCounter($within); }
-  my $cs = T_CS("\\c\@$ctr");
-  DefRegisterI($cs, undef, Number(0), allocate => '\count');
+  my $cs       = T_CS("\\c\@$ctr");
+  my $prevdefn = $STATE->lookupMeaning($cs);
+  if ($prevdefn && ((ref $prevdefn) eq 'LaTeXML::Core::Definition::Register')) {
+    ## Note: it is quite reasonable to redefine counters,
+    ## in order to change reseting & nesting.  So, don't be noisy!
+    # my $a = ($$prevdefn{address} || '') =~ /^\\count/;
+    # Info('unexpected', $cs, undef,
+    #     "Counter $ctr was already ".($a ? 'allocated':'defined').", skipping");
+  }
+  else {
+    Warn('unexpected', $cs, undef,
+      "Counter " . ToString($cs) . " was already defined as $prevdefn; redefining") if $prevdefn;
+    DefRegisterI($cs, undef, Number(0), allocate => '\count'); }
   AfterAssignment();
   AssignValue("\\cl\@$ctr" => Tokens(), 'global') unless LookupValue("\\cl\@$ctr");
   DefRegisterI(T_CS("\\c\@$unctr"), undef, Number(0));
@@ -648,9 +666,7 @@ sub NewCounter {
     'global') if $within;
   AssignValue('nested_counters_' . $ctr => $options{nested}, 'global') if $options{nested};
   # default is equivalent to \arabic{ctr}, but w/o using the LaTeX macro!
-  DefMacroI(T_CS("\\the$ctr"), undef, sub {
-      ExplodeText(CounterValue($ctr)->valueOf); },
-    scope => 'global');
+  DefMacroI(T_CS("\\the$ctr"), undef, "\\lx\@counter\@arabic{$ctr}", scope => 'global');
   if (!LookupDefinition(T_CS("\\p\@$ctr"))) {
     DefMacroI(T_CS("\\p\@$ctr"), undef, Tokens(), scope => 'global'); }
   my $prefix = $options{idprefix};
@@ -1251,7 +1267,7 @@ sub DefPrimitiveI {
   $paramlist = parseParameters($paramlist, $cs) if defined $paramlist && !ref $paramlist;
   my $mode    = $options{mode};
   my $bounded = $options{bounded};
-  # Not sure robust entirely makes sense for Primitives, other than LaTeXML vs LaTeX mismatch
+  # robust makes $cs a protected Macro, expanding to primtive with munged cs
   my $defcs = ($options{robust} ? defRobustCS($cs, %options) : $cs);
   $STATE->installDefinition(LaTeXML::Core::Definition::Primitive
       ->new($defcs, $paramlist, $replacement,
@@ -1267,7 +1283,7 @@ sub DefPrimitiveI {
       outer    => $options{outer},
       long     => $options{long},
       isPrefix => $options{isPrefix},
-      alias    => $options{alias},
+      alias    => (defined $options{alias} ? coerceCS($options{alias}) : undef),
       ),
     $options{scope});
   AssignValue(ToString($cs) . ":locked" => 1) if $options{locked};
@@ -1296,7 +1312,7 @@ sub DefRegisterI {
   $paramlist = parseParameters($paramlist, $cs) if defined $paramlist && !ref $paramlist;
   my $type    = $register_types{ ref $value };
   my $address = ($options{address} ? ToString($options{address})
-    : ($options{allocate} ? allocateRegister($options{allocate}) : undef));
+    : ($options{allocate} ? allocateRegister($options{allocate}, $cs) : undef));
   $address = ToString($cs) unless $address;
   if ((defined $value) && ((!defined $options{address}) || !defined LookupValue($address))) {
     AssignValue($address => $value, 'global'); }    # Assign, but do not RE-assign
@@ -1372,12 +1388,12 @@ sub flatten {
 #   properties      : a hashref listing default values of properties to assign to the Whatsit.
 #                     These properties can be used in the constructor.
 my $constructor_options = {    # [CONSTANT]
-  mode         => 1, requireMath => 1, forbidMath => 1, font       => 1,
-  alias        => 1, reversion   => 1, sizer      => 1, properties => 1,
-  nargs        => 1,
-  beforeDigest => 1, afterDigest => 1, beforeConstruct => 1, afterConstruct => 1,
-  captureBody  => 1, scope       => 1, bounded         => 1, locked         => 1,
-  outer        => 1, long        => 1, robust          => 1 };
+  mode         => 1, requireMath   => 1, forbidMath => 1, font       => 1,
+  alias        => 1, reversion     => 1, sizer      => 1, properties => 1,
+  nargs        => 1, attributeForm => 1,
+  beforeDigest => 1, afterDigest   => 1, beforeConstruct => 1, afterConstruct => 1,
+  captureBody  => 1, scope         => 1, bounded         => 1, locked         => 1,
+  outer        => 1, long          => 1, robust          => 1 };
 
 sub inferSizer {
   my ($sizer, $reversion) = @_;
@@ -1397,7 +1413,7 @@ sub DefConstructorI {
   $paramlist = parseParameters($paramlist, $cs) if defined $paramlist && !ref $paramlist;
   my $mode    = $options{mode};
   my $bounded = $options{bounded};
-  # Not sure robust entirely makes sense for Constructors, other than LaTeXML vs LaTeX mismatch
+  # robust makes $cs a protected Macro, expanding to primtive with munged cs
   my $defcs = ($options{robust} ? defRobustCS($cs, %options) : $cs);
   $STATE->installDefinition(LaTeXML::Core::Definition::Constructor
       ->new($defcs, $paramlist, $replacement,
@@ -1413,14 +1429,15 @@ sub DefConstructorI {
       beforeConstruct => flatten($options{beforeConstruct}),
       afterConstruct  => flatten($options{afterConstruct}),
       nargs           => $options{nargs},
-      alias           => (defined $options{alias} ? $options{alias}
+      alias           => (defined $options{alias} ? coerceCS($options{alias})
         : ($options{robust} ? $cs : undef)),
-      reversion   => $options{reversion},
-      sizer       => inferSizer($options{sizer}, $options{reversion}),
-      captureBody => $options{captureBody},
-      properties  => $options{properties} || {},
-      outer       => $options{outer},
-      long        => $options{long}),
+      reversion     => $options{reversion},
+      attributeForm => $options{attributeForm},
+      sizer         => inferSizer($options{sizer}, $options{reversion}),
+      captureBody   => $options{captureBody},
+      properties    => $options{properties} || {},
+      outer         => $options{outer},
+      long          => $options{long}),
     $options{scope});
   AssignValue(ToString($cs) . ":locked" => 1) if $options{locked};
   return; }
@@ -1556,7 +1573,7 @@ sub DefMathI {
   my $nargs   = ($paramlist ? scalar($paramlist->getParameters) : 0);
   my $csname  = $cs->getString;
   my $meaning = $options{meaning};
-  my $name    = $options{alias} || $csname;
+  my $name    = (defined $options{alias} ? ToString($options{alias}) : $csname);
   # Avoid undefs specifically, we'll be doing string comparisons
   $presentation = '' unless defined $presentation;
   $meaning      = '' unless defined $meaning;
@@ -1635,9 +1652,9 @@ sub defmath_common_constructor_options {
   my $sizer          = inferSizer($options{sizer}, $options{reversion});
   my $presentation_s = $presentation && ToString($presentation);
   return (
-    alias => $options{alias} || $cs->getString,
+    alias => (defined $options{alias} ? coerceCS($options{alias}) : $cs),
     (defined $options{reversion} ? (reversion => $options{reversion}) : ()),
-    (defined $sizer              ? (sizer     => $sizer)              : ()),
+    (defined $sizer              ? (sizer => $sizer)                  : ()),
     beforeDigest => flatten(sub { requireMath($cs->getString); },
       ($options{nogroup} ? ()                                        : (sub { $_[0]->bgroup; })),
       ($options{font}    ? (sub { MergeFont(%{ $options{font} }); }) : ()),
@@ -1758,9 +1775,8 @@ sub defmath_prim {
         my $locator    = $stomach->getGullet->getLocator;
         my %properties = %options;
         my $font       = LookupValue('font')->merge(%$reqfont)->specialize($string);
-        my $mode       = (LookupValue('IN_MATH') ? 'math' : 'text');
-        my $alias      = (ref $options{alias}    ? $options{alias}
-          : (defined $options{alias} ? T_CS($options{alias}) : undef));
+        my $mode       = (LookupValue('IN_MATH')  ? 'math'                    : 'text');
+        my $alias      = (defined $options{alias} ? coerceCS($options{alias}) : undef);
         my $reversion =
           ((!defined $options{reversion}) && (($options{revert_as} || '') eq 'presentation')
           ? $presentation : $alias // $cs);
@@ -1789,7 +1805,7 @@ sub defmath_cons {
         ? $cs : $presentation->unlist); }; }
   $STATE->installDefinition(LaTeXML::Core::Definition::Constructor->new($defcs, $paramlist,
       ($nargs == 0
-          # If trivial presentation, allow it in Text
+        # If trivial presentation, allow it in Text
         ? ($presentation !~ /(?:\(|\)|\\)/
           ? "?#isMath(<ltx:XMTok role='#role' scriptpos='#scriptpos' stretchy='#stretchy'"
             . " font='#font' $cons_attr$end_tok)"
@@ -1818,7 +1834,8 @@ my $environment_options = {    # [CONSTANT]
   beforeDigest     => 1, afterDigest     => 1,
   afterDigestBegin => 1, beforeDigestEnd => 1, afterDigestBody => 1,
   beforeConstruct  => 1, afterConstruct  => 1,
-  reversion        => 1, sizer           => 1, scope => 1, locked => 1 };
+  reversion        => 1, sizer           => 1, scope => 1, locked => 1,
+  attributeForm    => 1 };
 
 sub DefEnvironment {
   my ($proto, $replacement, %options) = @_;
@@ -1864,8 +1881,9 @@ sub DefEnvironmentI {
       nargs          => $options{nargs},
       captureBody    => 1,
       properties     => $options{properties} || {},
-      (defined $options{reversion} ? (reversion => $options{reversion}) : ()),
-      (defined $sizer              ? (sizer     => $sizer)              : ()),
+      (defined $options{reversion}     ? (reversion     => $options{reversion})     : ()),
+      (defined $options{attributeForm} ? (attributeForm => $options{attributeForm}) : ()),
+      (defined $sizer                  ? (sizer         => $sizer)                  : ()),
       ), $options{scope});
   $STATE->installDefinition(LaTeXML::Core::Definition::Constructor
       ->new(T_CS("\\end{$name}"), "", "",
@@ -1905,8 +1923,9 @@ sub DefEnvironmentI {
       nargs          => $options{nargs},
       captureBody    => T_CS("\\end$name"),           # Required to capture!!
       properties     => $options{properties} || {},
-      (defined $options{reversion} ? (reversion => $options{reversion}) : ()),
-      (defined $sizer              ? (sizer     => $sizer)              : ()),
+      (defined $options{reversion}     ? (reversion     => $options{reversion})     : ()),
+      (defined $options{attributeForm} ? (attributeForm => $options{attributeForm}) : ()),
+      (defined $sizer                  ? (sizer         => $sizer)                  : ()),
       ), $options{scope});
   $STATE->installDefinition(LaTeXML::Core::Definition::Constructor
       ->new(T_CS("\\end$name"), "", "",
@@ -2466,7 +2485,7 @@ sub AddToMacro {
   else {
     local $LaTeXML::Core::State::UNLOCKED = 1;    # ALLOW redefinitions that only adding to the macro
     DefMacroI($cs, undef, Tokens(map { $_->unlist }
-          map { (blessed $_ ? $_ : TokenizeInternal($_)) } ($defn->getExpansion, @tokens)),
+        map { (blessed $_ ? $_ : TokenizeInternal($_)) } ($defn->getExpansion, @tokens)),
       nopackParameters => 1, scope => 'global', locked => $$defn{locked}); }
   return; }
 
@@ -2794,16 +2813,21 @@ sub FontDecodeString {
   my ($string, $encoding, $implicit) = @_;
   return if !defined $string;
   my ($map, $font);
+  my $map_max   = 256;                                     # Up to 256 chars in FontMap
+  my $input_enc = $STATE->lookupValue('INPUT_ENCODING');
+  # BUT, if input was in utf8, we'll assume the upper half 128-256 is ALREADY unicode!
+  if ($input_enc && ($input_enc eq 'utf8')) {
+    $map_max = 128; }
   if (!$encoding) {
     $font     = LookupValue('font');
     $encoding = $font->getEncoding; }
-  if ($encoding && ($map = LoadFontMap($encoding))) {    # OK got some map.
+  if ($encoding && ($map = LoadFontMap($encoding))) {      # OK got some map.
     my ($family, $fmap);
     if ($font && ($family = $font->getFamily) && ($fmap = LookupValue($encoding . '_' . $family . '_fontmap'))) {
-      $map = $fmap; } }                                  # Use the family specific map, if any.
-
+      $map = $fmap; } }                                    # Use the family specific map, if any.
+  $map_max = 128 if $map && !defined($$map[128]);          # ALSO for short font maps
   return join('', grep { defined $_ }
-      map { ($implicit ? (($map && ($_ < 128)) ? $$map[$_] : pack('U', $_))
+      map { ($implicit ? (($map && ($_ < $map_max)) ? $$map[$_] : pack('U', $_))
         : ($map ? $$map[$_] : undef)) }
       map { ord($_) } split(//, $string)); }
 
@@ -3668,6 +3692,15 @@ the one defined in the C<prototype>.  This is a convenient alternative for
 reversion when a 'public' command conditionally expands into
 an internal one, but the reversion should be for the public command.
 
+=item C<attributeForm=E<gt>I<texstring> | I<code>($whatsit,#1,#2,...)>
+
+specifies the conversion of the invocation back into plain text
+for an attribute value, used by the C<toAttribute> method
+(the default is C<toString>).
+The I<textstring> string can include C<#1>, C<#2>...
+The I<code> is called with the C<$whatsit> and digested arguments
+and must return a string.
+
 =item C<sizer=E<gt>I<string> | I<code>($whatsit)>
 
 specifies how to compute (approximate) the displayed size of the object,
@@ -3869,6 +3902,8 @@ These options are the same as for L</Primitives>
 =item C<reversion=E<gt>I<reversion>>,
 
 =item C<alias=E<gt>I<cs>>,
+
+=item C<attributeForm=E<gt>I<texstring> | I<code>($whatsit,#1,#2,...)>,
 
 =item C<sizer=E<gt>I<sizer>>,
 

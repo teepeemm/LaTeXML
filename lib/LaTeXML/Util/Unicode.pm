@@ -62,7 +62,9 @@ our @accent_data = (
     unwrapped => "\x{02DA}", role => 'OVERACCENT' },                      # (or \x{2218} ?)
   { name => 'vec', combiner => "\x{20D7}", standalone => "\N{NBSP}\x{20D7}",    # \vec
     unwrapped => "\x{2192}", role => 'OVERACCENT' },
-  { name => 'tie', combiner => "\x{0361}", standalone => "\N{NBSP}\x{0361}",    # \t
+  { name => 'arch', combiner => "\x{0311}", standalone => "\N{NBSP}\x{0311}",    # ? inverted breve
+    unwrapped => "u", role => 'OVERACCENT' },
+  { name => 'tie', combiner => "\x{0361}", standalone => "\N{NBSP}\x{0361}",    # \t, double inv.breve
     unwrapped => "u", role => 'OVERACCENT' },
   ## UNDERACCENT accents
   { name => 'cedilla', combiner => "\x{0327}", standalone => UTF(0xB8),         # \c
@@ -338,27 +340,29 @@ our %math_props = (
   "8" => { role => 'NUMBER', meaning => 8 },
   "9" => { role => 'NUMBER', meaning => 9 },
   #======================================================================
-  '=' => { role => 'RELOP',   meaning => 'equals' },
-  '+' => { role => 'ADDOP',   meaning => 'plus' },
-  '-' => { role => 'ADDOP',   meaning => 'minus' },
-  '*' => { role => 'MULOP',   meaning => 'times' },
-  '/' => { role => 'MULOP',   meaning => 'divide' },
-  '!' => { role => 'POSTFIX', meaning => 'factorial' },
-  ',' => { role => 'PUNCT' },
-  '.' => { role => 'PERIOD' },
-  ';' => { role => 'PUNCT' },
-  ':' => { role => 'METARELOP', name     => 'colon' },          # plausible default?
-  '|' => { role => 'VERTBAR',   stretchy => 'false' },
-  '<' => { role => 'RELOP',     meaning  => 'less-than' },
-  '>' => { role => 'RELOP',     meaning  => 'greater-than' },
-  '(' => { role => 'OPEN',      stretchy => 'false' },
-  ')' => { role => 'CLOSE',     stretchy => 'false' },
-  '[' => { role => 'OPEN',      stretchy => 'false' },
-  ']' => { role => 'CLOSE',     stretchy => 'false' },
-  '{' => { role => 'OPEN',      stretchy => 'false' },
-  '}' => { role => 'CLOSE',     stretchy => 'false' },
-
-##  ':'        => { role => 'METARELOP' },    # \colon # Seems like good default role
+  '='     => { role => 'RELOP',   meaning => 'equals' },
+  '+'     => { role => 'ADDOP',   meaning => 'plus' },
+  '-'     => { role => 'ADDOP',   meaning => 'minus' },
+  '*'     => { role => 'MULOP',   meaning => 'times' },
+  '/'     => { role => 'MULOP',   meaning => 'divide' },
+  '!'     => { role => 'POSTFIX', meaning => 'factorial' },
+  ','     => { role => 'PUNCT' },
+  '.'     => { role => 'PERIOD' },
+  ';'     => { role => 'PUNCT' },
+  ':'     => { role => 'METARELOP', name     => 'colon' },             # plausible default?
+  '|'     => { role => 'VERTBAR',   stretchy => 'false' },
+  '<'     => { role => 'RELOP',     meaning  => 'less-than' },
+  '>'     => { role => 'RELOP',     meaning  => 'greater-than' },
+  '('     => { role => 'OPEN',      stretchy => 'false' },
+  ')'     => { role => 'CLOSE',     stretchy => 'false' },
+  '['     => { role => 'OPEN',      stretchy => 'false' },
+  ']'     => { role => 'CLOSE',     stretchy => 'false' },
+  '{'     => { role => 'OPEN',      stretchy => 'false' },
+  '}'     => { role => 'CLOSE',     stretchy => 'false' },
+  '&'     => { role => 'ADDOP',     meaning  => 'and' },
+  '&amp;' => { role => 'ADDOP',     meaning  => 'and' },
+  '%'     => { role => 'POSTFIX',   meaning  => 'percent' },
+  '$'     => { role => 'OPERATOR',  meaning  => 'currency-dollar' },
 
   #======================================================================
   UTF(0x5C) => { role => 'ADDOP', meaning => 'set-minus' },        # \backslash
@@ -490,8 +494,10 @@ our %math_props = (
   "\x{2323}" => { role => 'RELOP' },                                          # \smileSMI},
   "\x{25B3}" => { role => 'ADDOP' },                                          # \bigtriangleup
   "\x{25B7}" => { role => 'ADDOP' },                                          # \triangleright
+  "\x{25B9}" => { role => 'ADDOP' },                                          # \triangleright
   "\x{25BD}" => { role => 'ADDOP' },                                          # \bigtriangledown
   "\x{25C1}" => { role => 'ADDOP' },                                          # \triangleleft
+  "\x{25C3}" => { role => 'ADDOP' },                                          # \triangleleft
   "\x{25CB}" => { role => 'MULOP' },                                          # \bigcirc
   "\x{27C2}" => { role => 'RELOP', meaning => 'perpendicular-to' },           # \perp
   "\x{27E8}" => { role => 'OPEN', name => 'langle', stretchy => 'false' }, # \langle # LEFT-POINTING ANGLE BRACKET
@@ -513,6 +519,7 @@ our %math_props = (
   "\x{2AB0}" => { role => 'RELOP',      meaning => 'succeeds-or-equals' },    # \succeq
   "\x{FF0F}" => { role => 'OPFUNCTION', meaning => 'not' },                   # \not
       #======================================================================
+  "?"       => { role => 'UNKNOWN' }, # Override TeX's mathcode (CLOSE presentationally, not semantic)
   "arccos"  => { role => 'OPFUNCTION',   meaning => 'inverse-cosine' },          # \arccos #
   "arcsin"  => { role => 'OPFUNCTION',   meaning => 'inverse-sine' },            # \arcsin #
   "arctan"  => { role => 'OPFUNCTION',   meaning => 'inverse-tangent' },         # \arctan #

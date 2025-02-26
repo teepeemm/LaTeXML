@@ -119,8 +119,10 @@ DefConstructorI('\lx@begin@inmath@text', undef,
   "<ltx:XMText>"
     . "#body"
     . "</ltx:XMText>",
-  alias => T_MATH, beforeDigest => sub { $_[0]->beginMode('text'); }, captureBody => 1);
-DefConstructorI('\lx@end@inmath@text', undef, "", alias => T_MATH,
+  alias        => T_MATH,
+  beforeDigest => sub { $_[0]->beginMode('text'); }, captureBody => 1);
+DefConstructorI('\lx@end@inmath@text', undef, "",
+  alias        => T_MATH,
   beforeDigest => sub { $_[0]->endMode('text'); });
 
 #======================================================================
@@ -134,13 +136,8 @@ DefConstructorI('\lx@begin@display@math', undef,
     . "</ltx:Math>"
     . "</ltx:equation>",
   reversion    => Tokens(T_MATH, T_MATH),
-  beforeDigest => sub {
-    $_[0]->beginMode('display_math');
-    if (my @everymath_toks = $STATE->lookupDefinition(T_CS('\everymath'))->valueOf->unlist()) {
-      $_[0]->getGullet->unread(@everymath_toks); }
-    if (my @everydisplay_toks = $STATE->lookupDefinition(T_CS('\everydisplay'))->valueOf->unlist()) {
-      $_[0]->getGullet->unread(@everydisplay_toks); }
-    return; }, captureBody => 1);
+  beforeDigest => sub { $_[0]->beginMode('display_math'); },
+  captureBody  => 1);
 DefConstructorI('\lx@end@display@math', undef, "",
   reversion    => Tokens(T_MATH, T_MATH),
   beforeDigest => sub { $_[0]->endMode('display_math'); });
@@ -152,11 +149,8 @@ DefConstructorI('\lx@begin@inline@math', undef,
     . "</ltx:XMath>"
     . "</ltx:Math>",
   reversion    => Tokens(T_MATH),
-  beforeDigest => sub {
-    $_[0]->beginMode('inline_math');
-    if (my @everymath_toks = $STATE->lookupDefinition(T_CS('\everymath'))->valueOf->unlist()) {
-      $_[0]->getGullet->unread(@everymath_toks); }
-    return; }, captureBody => 1);
+  beforeDigest => sub { $_[0]->beginMode('inline_math'); },
+  captureBody  => 1);
 DefConstructorI('\\lx@end@inline@math', undef, "",
   reversion    => Tokens(T_MATH),
   beforeDigest => sub { $_[0]->endMode('inline_math'); });
@@ -908,19 +902,42 @@ Let('\vcenter', '\vbox');
 # \overline               c  puts a line over the following character or subformula.
 # \underline              c  puts a line under the following character or subformula.
 
-DefMath('\overline Digested', UTF(0xAF), operator_role => 'OVERACCENT');    # MACRON
-DefMath('\lx@math@underline{}', UTF(0xAF), operator_role => 'UNDERACCENT',
-  name => 'underline', alias => '\underline');
+# Note that (over|under) brace accents act like \limit, but lines, arrows do NOT!
+DefMath('\lx@math@overline{}', UTF(0xAF),
+  operator_role => 'OVERACCENT', operator_stretchy => 'true',
+  name          => 'overline',   alias             => '\overline');
+DefConstructor('\lx@text@overline{}',
+  "<ltx:text framed='overline' _noautoclose='1'>#1</ltx:text>");
+DefMath('\lx@math@underline{}', UTF(0xAF),
+  operator_role => 'UNDERACCENT', operator_stretchy => 'true',
+  name          => 'underline',   alias             => '\underline');
 DefConstructor('\lx@text@underline{}',
   "<ltx:text framed='underline' _noautoclose='1'>#1</ltx:text>");
-DefMath('\lx@math@overrightarrow{}', "\x{2192}", operator_role => 'OVERACCENT',
-  name => 'overrightarrow', alias => '\overrightarrow');
-DefMath('\lx@math@overleftarrow{}', "\x{2190}", operator_role => 'OVERACCENT',
-  name => 'overleftarrow', alias => '\overleftarrow');
+DefMath('\lx@math@overrightarrow{}', "\x{2192}",
+  operator_role => 'OVERACCENT',     operator_stretchy => 'true',
+  name          => 'overrightarrow', alias             => '\overrightarrow');
+DefMath('\lx@math@overleftarrow{}', "\x{2190}",
+  operator_role => 'OVERACCENT',    operator_stretchy => 'true',
+  name          => 'overleftarrow', alias             => '\overleftarrow');
+DefMath('\lx@math@underrightarrow{}', "\x{2192}",
+  operator_role => 'UNDERACCENT',     operator_stretchy => 'true',
+  name          => 'underrightarrow', alias             => '\underrightarrow');
+DefMath('\lx@math@underleftarrow{}', "\x{2190}",
+  operator_role => 'UNDERACCENT',    operator_stretchy => 'true',
+  name          => 'underleftarrow', alias             => '\underleftarrow');
+DefMath('\lx@math@overbrace{}', "\x{23DE}",
+  operator_role => 'OVERACCENT', scriptpos => 'mid',        operator_stretchy => 'true',
+  name          => 'overbrace',  alias     => '\overbrace', robust            => 1);
+DefMath('\lx@math@underbrace{}', "\x{23DF}",
+  operator_role => 'UNDERACCENT', scriptpos => 'mid',         operator_stretchy => 'true',
+  name          => 'underbrace',  alias     => '\underbrace', robust            => 1);
 
 # Careful: Use \protect so that it doesn't expand too early in alignments, etc.
 # [Really shouldn't use \protect, since this is a TeX primitive and \protect is LaTeX]
-DefMacro('\underline{}', '\protect\ifmmode\lx@math@underline{#1}\else\lx@text@underline{#1}\fi');
+DefMacro('\overline{}', '\protect\ifmmode\lx@math@overline{#1}\else\lx@text@overline{#1}\fi',
+  locked => 1);
+DefMacro('\underline{}', '\protect\ifmmode\lx@math@underline{#1}\else\lx@text@underline{#1}\fi',
+  locked => 1);
 
 #======================================================================
 # fraction-like things
