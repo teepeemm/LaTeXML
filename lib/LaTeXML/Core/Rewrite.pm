@@ -381,11 +381,11 @@ sub compile_replacement {
   else {
     return sub {
       my $stomach = $STATE->getStomach;
-      $stomach->bgroup;
+      $stomach->beginMode('restricted_horizontal'); # act like \hbox
       $STATE->assignValue(font     => LaTeXML::Common::Font->new(), 'local');
       $STATE->assignValue(mathfont => LaTeXML::Common::Font->new(), 'local');
       my $box = $stomach->digest($pattern, 0);
-      $stomach->egroup;
+      $stomach->endMode('restricted_horizontal');
       $box = $box->getBody if $$self{math};
       $_[0]->absorb($box); }
 } }
@@ -405,11 +405,11 @@ sub compile_regexp {
 sub digest_rewrite {
   my ($string) = @_;
   my $stomach = $STATE->getStomach;
-  $stomach->bgroup;
+  $stomach->beginMode('restricted_horizontal');
   $STATE->assignValue(font => LaTeXML::Common::Font->new(), 'local'); # Use empty font, so eventual insertion merges.
   $STATE->assignValue(mathfont => LaTeXML::Common::Font->new(), 'local');
   my $box = $stomach->digest($string, 0);
-  $stomach->egroup;
+  $stomach->endMode('restricted_horizontal');
   return $box; }
 
 #**********************************************************************
@@ -420,7 +420,9 @@ sub domToXPath {
   return ($xpath, $nnodes, @wilds); }
 
 # May need some work here;
-my %EXCLUDED_MATCH_ATTRIBUTES = (scriptpos => 1, 'xml:id' => 1, fontsize => 1);    # [CONSTANT]
+my %EXCLUDED_MATCH_ATTRIBUTES = (
+    scriptpos => 1, mathstyle => 1,
+    'xml:id' => 1, fontsize => 1);    # [CONSTANT]
 
 sub domToXPath_rec {
   my ($document, $node, $axis, $pos) = @_;

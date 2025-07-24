@@ -192,7 +192,8 @@ DefMacro('\tablename',                    'TABLE');
 DefMacro('\thetable',                     '\Roman{table}');
 
 DefConstructor('\IEEEQEDclosed',
-  "?#isMath(<ltx:XMTok role='PUNCT'>\x{220E}</ltx:XMTok>)(\x{220E})");
+  "?#isMath(<ltx:XMTok role='PUNCT'>\x{220E}</ltx:XMTok>)(\x{220E})",
+  enterHorizontal => 1);
 Let('\IEEEQEDopen', '\IEEEQEDclosed');
 Let('\IEEEQED',     '\IEEEQEDclosed');
 
@@ -351,18 +352,18 @@ DefEnvironment('{IEEEitemize}[]',
   "<ltx:itemize xml:id='#id'>#body</ltx:itemize>",
   properties      => sub { beginItemize('itemize', '@item'); },
   beforeDigestEnd => sub { Digest('\par'); },
-  locked          => 1, mode => 'text');
+  locked          => 1, mode => 'internal_vertical');
 DefEnvironment('{IEEEenumerate}[]',
   "<ltx:enumerate  xml:id='#id'>#body</ltx:enumerate>",
   properties      => sub { beginItemize('enumerate', 'enum'); },
   beforeDigestEnd => sub { Digest('\par'); },
-  locked          => 1, mode => 'text');
+  locked          => 1, mode => 'internal_vertical');
 DefEnvironment('{IEEEdescription}[]',
   "<ltx:description  xml:id='#id'>#body</ltx:description>",
   beforeDigest    => sub { Let('\makelabel', '\descriptionlabel'); },
   properties      => sub { beginItemize('description', '@desc'); },
   beforeDigestEnd => sub { Digest('\par'); },
-  locked          => 1, mode => 'text');
+  locked          => 1, mode => 'internal_vertical');
 
 # override LaTeX's default IED lists
 Let('\itemize',                  '\IEEEitemize');
@@ -427,6 +428,7 @@ Let('\QEDopen',   '\IEEEQEDopen');
 DefMacro('\qed', '\ltx@qed');
 DefConstructor('\ltx@qed',
   "?#isMath(<ltx:XMTok role='PUNCT'>\x{220E}</ltx:XMTok>)(\x{220E})",
+  enterHorizontal => 1,
   reversion => '\qed');
 Let('\proof',    '\IEEEproof');
 Let('\endproof', '\endIEEEproof');
@@ -441,6 +443,15 @@ Let('\endbiographynophoto', '\endIEEEbiographynophoto');
 # see docs at http://www.michaelshell.org/tex/ieeetran/tools/
 # TODO: Maybe once we can emulate ".bst" files natively this comes into play?
 DefMacro('\bstctlcite[]{}', Tokens());
+
+### Disable the internal alignment-related environment, as it gets used for low-level tricks such as arXiv:2210.00108v4
+### \newcommand{\linebreakand}{%
+###   \end{@IEEEauthorhalign}
+###   \hfill\mbox{}\par
+###   \mbox{}\hfill\begin{@IEEEauthorhalign}
+### }
+DefMacroI(T_CS('\begin{@IEEEauthorhalign}'), undef, T_CS('\relax'));
+DefMacroI(T_CS('\end{@IEEEauthorhalign}'),   undef, T_CS('\relax'));
 
 #======================================================================
 

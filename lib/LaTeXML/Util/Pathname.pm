@@ -46,10 +46,11 @@ our @EXPORT = qw( &pathname_find &pathname_findall &pathname_kpsewhich
   &pathname_cwd &pathname_chdir &pathname_mkdir &pathname_copy
   &pathname_installation);
 
-my $ISWINDOWS;
+my ($DOSPATHS, $ISWINDOWS);
 
 BEGIN {
-  $ISWINDOWS = $^O =~ /^(MSWin|NetWare|cygwin)/i;
+  $DOSPATHS  = $^O =~ /^(MSWin|NetWare)/i;
+  $ISWINDOWS = $^O eq 'MSWin32';
   require Win32::ShellQuote if $ISWINDOWS;
 }
 
@@ -61,7 +62,7 @@ BEGIN {
 ### my $SEP         = '/';                          # [CONSTANT]
 # Some indicators that this is not sufficient? (calls to libraries/externals???)
 # PRELIMINARY test, probably need to be even more careful
-my $SEP         = ($ISWINDOWS ? '\\' : '/');    # [CONSTANT]
+my $SEP         = ($DOSPATHS  ? '\\' : '/');    # [CONSTANT]
 my $KPATHSEP    = ($ISWINDOWS ? ';'  : ':');    # [CONSTANT]
 my $LITERAL_RE  = '(?:literal)(?=:)';           # [CONSTANT]
 my $PROTOCOL_RE = '(?:https|http|ftp)(?=:)';    # [CONSTANT]
@@ -171,7 +172,7 @@ sub pathname_is_url {
 
 sub pathname_is_literaldata {
   my ($pathname) = @_;
-  if ($pathname =~ /^($LITERAL_RE)/) { return $1; } else { return; } }
+  if ($pathname && $pathname =~ /^($LITERAL_RE)/) { return $1; } else { return; } }
 
 # Check whether $pathname is contained in (ie. underneath) $base
 # Returns the relative pathname if it is underneath; undef otherwise.
@@ -373,9 +374,9 @@ sub candidate_pathnames {
           qr/^\Q$name\E\Q$ext\E$/]); } }
   # Now, combine; precedence to leading directories.
   foreach my $dir (@dirs) {
-    opendir(DIR, $dir) or next;
-    my @dir_files = readdir(DIR);
-    closedir(DIR);
+    opendir(my $dir_handle, $dir) or next;
+    my @dir_files = readdir($dir_handle);
+    closedir($dir_handle);
     for my $local_file (@dir_files) {
       for my $regex_pair (@regexes) {
         my ($i_regex, $regex) = @$regex_pair;
@@ -428,9 +429,9 @@ sub build_kpse_cache {
   # texmf: ALL the directories used for any purposes, including docs, fonts, etc
   # texpaths: the directories which contain the TeX related files we're interested in
   #. (but they're typically below where the ls-R indexes are!)
-  my ($texmf,$texpaths) = split("\n",
-      `"$kpsewhich" --expand-var \'\\\$TEXMF\' --show-path tex $kpse_toolchain`); 
-  my @filters  = ();    # Really shouldn't end up empty.
+  my ($texmf, $texpaths) = split("\n",
+    `"$kpsewhich" --expand-var \'\\\$TEXMF\' --show-path tex $kpse_toolchain`);
+  my @filters = ();    # Really shouldn't end up empty.
   foreach my $path (split(/$KPATHSEP/, $texpaths)) {
     $path =~ s/^!!//; $path =~ s|//+$|/|;
     push(@filters, $path) if -d $path; }
@@ -450,7 +451,7 @@ sub build_kpse_cache {
       while (<$LSR>) {
         chop;
         next if !$_ || (substr($_, 0, 1) eq '%');
-	if(substr($_, -1) eq ':'){
+        if (substr($_, -1) eq ':') {
           $subdir = substr($_, 0, -1);
           $subdir =~ s|^\./||;             # remove prefix
           my $d = $dir . '/' . $subdir;    # Hopefully OS safe, for comparison?

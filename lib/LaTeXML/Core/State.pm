@@ -114,7 +114,9 @@ sub new {
       $$self{catcode}{ chr($c) } = [CC_LETTER];
       $$self{catcode}{ chr($c + ord('a') - ord('A')) } = [CC_LETTER]; }
   }
-  $$self{value}{SPECIALS} = [['^', '_', '~', '&', '$', '#', "'"]];
+  $$self{value}{MODE}         = ['vertical'];
+  $$self{value}{BOUND_MODE}   = ['vertical'];
+  $$self{value}{SPECIALS}     = [['^', '_', '~', '&', '$', '#', "'"]];
   if ($options{catcodes} eq 'style') {
     $$self{catcode}{'@'} = [CC_LETTER]; }
   $$self{mathcode}            = {};
@@ -141,8 +143,9 @@ sub assign_internal {
   # since this is called extremely often and should be highly standardized
   if (my $globaldefs = $$self{value}{'\globaldefs'}) {
     if (my $global_value = $$globaldefs[0][0]) {
+      if($scope && ($scope ne 'global') && ($scope ne 'local')){} # ONLY override these
       # magic TeX register override: \globaldefs
-      if ($global_value == 1) {
+      elsif ($global_value == 1) {
         $scope = 'global'; }
       elsif ($global_value == -1) {
         $scope = 'local'; } } }
@@ -168,6 +171,17 @@ sub assign_internal {
       $$self{$table}{$key}[0] = $value; }     # Simply replace the value
     else {                                    # Otherwise, push new value & set 1 to be undone
       $$self{undo}[0]{$table}{$key} = 1;
+      unshift(@{ $$self{$table}{$key} }, $value); } }    # And push new binding.
+  elsif ($scope eq 'inplace') {                          # Special case for \box & friends
+    if (exists $$self{$table}{$key}) {        # If the value was previously assigned AT ALL
+      $$self{$table}{$key}[0] = $value; }     # Simply replace the value in its frame
+    elsif ($value) {                          # Otherwise, push new value, globally
+      my $frame;
+      my @frames = @{ $$self{undo} };
+      while (@frames) {                       # Find top frame
+        $frame = shift(@frames);
+        last if $$frame{_FRAME_LOCK_}; }
+      $$frame{$table}{$key} = 1;
       unshift(@{ $$self{$table}{$key} }, $value); } }    # And push new binding.
   else {
     assign_internal($self, 'stash', $scope, [], 'global') unless $$self{stash}{$scope}[0];
@@ -574,7 +588,7 @@ sub beginSemiverbatim {
   my ($self, @extraspecials) = @_;
   # Is this a good/safe enough shorthand, or should we really be doing beginMode?
   pushFrame($self);
-  assignValue($self, MODE    => 'text');
+  assignValue($self, MODE    => 'restricted_horizontal');
   assignValue($self, IN_MATH => 0);
   map { assignCatcode($self, $_ => CC_OTHER, 'local') }
     @{ lookupValue($self, 'SPECIALS') }, @extraspecials;
@@ -834,6 +848,7 @@ determines how the assignment is made.  The allowed values and their implication
  global   : global assignment.
  local    : local assignment, within the current grouping.
  undef    : global if \global preceded, else local (default)
+ inplace  : assigns in same frame as previously set (for unsetting \box), or globally
  <name>   : stores the assignment in a `scope' which
             can be loaded later.
 

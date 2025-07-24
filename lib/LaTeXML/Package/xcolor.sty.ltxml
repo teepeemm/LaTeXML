@@ -243,7 +243,8 @@ sub ParseXColor {
     if ($model eq 'named') {
       $color = LookupColor($spec); }
     else {
-      $color = Color($model, ($spec =~ /,/ ? split(/\s*,\s*/, $spec) : split(/\s+/, $spec)))->toCore; } }
+      $color = Color($model, (map { split(/\s+/, $_) }
+            ($spec =~ /,/ ? split(/\s*,\s*/, $spec) : ($spec))))->toCore; } }
   else {
     $color = DecodeColor($specs); }
   # And finally convert to the target model, if requested.
@@ -258,10 +259,17 @@ sub ParseXColor {
 sub DecodeColor {
   my ($expression) = @_;
   $expression = ToString($expression);
-  my $prefix_re      = qr/-/;    #
-                                 # [ <name> = . ==> current color; <name> = '' ==> white]
-  my $name_re        = qr/|[-]*\.|[-]*[a-zA-Z0-9@\*_]+|[a-zA-Z0-9@\*\-_]+/;
-  my $ne_name_re     = qr/[-]*\.|[-]*[a-zA-Z0-9@\*_]+|[a-zA-Z0-9@\*\-_]+/;
+  # The xcolor docs on <name> state:
+  # "Actually, besides letters and digits, certain other characters do also
+  #    work for ⟨name⟩ declarations, but the given restriction avoids misunderstandings
+  #    and ensures compatibility with future extensions of xcolor."
+  #
+  # So we only allow a few extras for the "actually" - at, dot, underscore, star and inner space.
+  my $prefix_re      = qr/-/;                 #
+                                              # [ <name> = . ==> current color; <name> = '' ==> white]
+  my $name_S         = qr/[a-zA-Z0-9@\*_.]/;
+  my $ne_name_re     = qr/[-]*$name_S(?:[ ]|$name_S)*|$name_S(?:[ -]|$name_S)*/;
+  my $name_re        = qr/|$ne_name_re/;
   my $pct_re         = qr/(?:\d*\.?\d*|[+-]*\d+\.?\d*|[+-]*\d*\.?\d+)/;
   my $pct_capture_re = qr/(\d*\.?\d*|[+-]*\d+\.?\d*|[+-]*\d*\.?\d+)/;
   # <mix_expr>     : !<pct1>!<name1>!...<pctn>!(<namen>)?
@@ -866,7 +874,7 @@ DefPrimitive('\rrshift Variable', sub {
 DefConstructor('\fcolorbox[]{}{} Undigested',
   "<ltx:text framed='rectangle' framecolor='#framecolor'"
     . " _noautoclose='1'>#text</ltx:text>",
-  bounded     => 1, mode => 'text',
+  mode => 'internal_vertical',  enterHorizontal => 1,
   afterDigest => sub {
     my ($stomach, $whatsit) = @_;
     my ($model, $fspec, $bspec, $text) = $whatsit->getArgs;
