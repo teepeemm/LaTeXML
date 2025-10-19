@@ -10,6 +10,7 @@ INSTALL
 INSTALL.SKIP
 LICENSE
 manual.pdf
+CODEOWNERS
 
 #==================================================
 # Executables
@@ -72,6 +73,7 @@ lib/LaTeXML/Core/MuGlue.pm
 lib/LaTeXML/Core/Pair.pm
 lib/LaTeXML/Core/PairList.pm
 
+lib/LaTeXML/Core/Dumper.pm
 # ....
 lib/LaTeXML/MathGrammar
 lib/LaTeXML/MathParser.pm
@@ -320,6 +322,7 @@ lib/LaTeXML/resources/Profiles/standard.opt
 #==================================================
 lib/LaTeXML/Engine/AmSTeX.pool.ltxml
 lib/LaTeXML/Engine/BibTeX.pool.ltxml
+lib/LaTeXML/Engine/Base.pool.ltxml
 lib/LaTeXML/Engine/Base_Schema.pool.ltxml
 lib/LaTeXML/Engine/Base_ParameterTypes.pool.ltxml
 lib/LaTeXML/Engine/Base_XMath.pool.ltxml
@@ -345,11 +348,16 @@ lib/LaTeXML/Engine/TeX_Paragraph.pool.ltxml
 lib/LaTeXML/Engine/TeX_Penalties.pool.ltxml
 lib/LaTeXML/Engine/TeX_Registers.pool.ltxml
 lib/LaTeXML/Engine/TeX_Tables.pool.ltxml
-lib/LaTeXML/Engine/plain.pool.ltxml
+lib/LaTeXML/Engine/plain_base.pool.ltxml
 lib/LaTeXML/Engine/LaTeX.pool.ltxml
 lib/LaTeXML/Engine/eTeX.pool.ltxml
-lib/LaTeXML/Engine/expl3.pool.ltxml
 lib/LaTeXML/Engine/pdfTeX.pool.ltxml
+lib/LaTeXML/Engine/plain_bootstrap.pool.ltxml
+lib/LaTeXML/Engine/plain_constructs.pool.ltxml
+lib/LaTeXML/Engine/latex_base.pool.ltxml
+lib/LaTeXML/Engine/latex_bootstrap.pool.ltxml
+lib/LaTeXML/Engine/latex_constructs.pool.ltxml
+lib/LaTeXML/Engine/math_common.pool.ltxml
 
 #==================================================
 # Supported Packages
@@ -651,6 +659,7 @@ lib/LaTeXML/Package/nomencl.sty.ltxml
 lib/LaTeXML/Package/nopageno.sty.ltxml
 lib/LaTeXML/Package/ntheorem.sty.ltxml
 lib/LaTeXML/Package/numprint.sty.ltxml
+lib/LaTeXML/Package/orcidlink.sty.ltxml
 lib/LaTeXML/Package/ot4.fontmap.ltxml
 lib/LaTeXML/Package/overpic.sty.ltxml
 lib/LaTeXML/Package/palatino.sty.ltxml
@@ -663,10 +672,13 @@ lib/LaTeXML/Package/pdftexcmds.sty.ltxml
 lib/LaTeXML/Package/pgf.sty.ltxml
 lib/LaTeXML/Package/pgfcircutils.tex.ltxml
 lib/LaTeXML/Package/pgfkeys.code.tex.ltxml
+lib/LaTeXML/Package/pgfkeys.sty.ltxml
 lib/LaTeXML/Package/pgfmath.code.tex.ltxml
+lib/LaTeXML/Package/pgfmath.sty.ltxml
 lib/LaTeXML/Package/pgfmathcalc.code.tex.ltxml
 lib/LaTeXML/Package/pgfplots.sty.ltxml
 lib/LaTeXML/Package/pgfplotstable.sty.ltxml
+lib/LaTeXML/Package/pgfrcs.sty.ltxml
 lib/LaTeXML/Package/pgfsys-latexml.def.ltxml
 lib/LaTeXML/Package/pgfutil-common.tex.ltxml
 lib/LaTeXML/Package/physics.sty.ltxml
@@ -963,6 +975,9 @@ t/slides/beamer.xml
 t/slides/slides.pdf
 t/slides/slides.tex
 t/slides/slides.xml
+t/complex/acm_aria.pdf
+t/complex/acm_aria.tex
+t/complex/acm_aria.xml
 t/complex/aastex_test.pdf
 t/complex/aastex_test.tex
 t/complex/aastex_test.xml
@@ -1541,6 +1556,9 @@ t/moderncv/cs_cv.html
 t/moderncv/cs_cv.pdf
 t/moderncv/cs_cv.tex
 t/moderncv/cs_cv.xml
+t/moderncv/orc.pdf
+t/moderncv/orc.tex
+t/moderncv/orc.xml
 t/namespace/ns1.dtd
 t/namespace/ns1.latexml
 t/namespace/ns1.pdf
@@ -1836,6 +1854,9 @@ t/tikz/tikz_figure.xml
 t/tikz/unit_tests_by_silviu.pdf
 t/tikz/unit_tests_by_silviu.tex
 t/tikz/unit_tests_by_silviu.xml
+t/tikz/various_colors.pdf
+t/tikz/various_colors.tex
+t/tikz/various_colors.xml
 t/tokenize/alltt.pdf
 t/tokenize/alltt.tex
 t/tokenize/alltt.xml

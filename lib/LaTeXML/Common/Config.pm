@@ -20,7 +20,6 @@ use Pod::Find qw(pod_where);
 use LaTeXML::Util::Pathname;
 use LaTeXML::Global;
 use LaTeXML::Common::Error;
-use Data::Dumper;
 our $PROFILES_DB = {};    # Class-wide, caches all profiles that get used while the server is alive
 our $is_bibtex   = qr/(^literal\:\s*\@)|(\.bib$)/;
 our $is_archive  = qr/(^literal\:PK)|(\.zip$)/;
@@ -220,6 +219,10 @@ sub read {
       $$opts{whatsin} = 'archive'; }
     elsif ($$opts{source} && ($$opts{source} =~ /\/$/)) {
       $$opts{whatsin} = 'directory'; } }
+  # If we are given a directory on input, add it to the searchpaths,
+  # as the actual tex source may be deeper within it (and will lose dir visibility)
+  if (($$opts{whatsin} || '') eq 'directory') {
+    push(@{ $$opts{paths} }, pathname_absolute($$opts{source})); }
   return $getOptions_success;
 }
 
@@ -420,7 +423,7 @@ sub _prepare_options {
       $$opts{whatsout} = 'archive';
     } else {
       $$opts{whatsout} = 'document';
-  } }
+    } }
   if ($$opts{format}) {
     # Lower-case for sanity's sake
     $$opts{format} = lc($$opts{format});
@@ -546,6 +549,9 @@ sub _prepare_options {
       elsif ($$opts{format} eq "xml")         { delete $$opts{stylesheet}; }
       else                                    { croak("Unrecognized target format: " . $$opts{format}); }
     }
+    if (!defined $$opts{defaultresources}) {
+      # JATS is the only format that does not use default resources.
+      $$opts{defaultresources} = 0 if $$opts{format} eq 'jats'; }
     # Check format and complete math and image options
     if ($$opts{format} eq 'html4') {
       $$opts{svg} = 0 unless defined $$opts{svg};    # No SVG by default in HTML.
@@ -564,6 +570,7 @@ sub _prepare_options {
     }
     # use parallel markup if there are multiple formats requested.
     $$opts{parallelmath} = 1 if ($$opts{math_formats} && (@{ $$opts{math_formats} } > 1));
+
   }
   # If really nothing hints to define format, then default it to XML
   $$opts{format} = 'xml' unless defined $$opts{format};

@@ -64,7 +64,7 @@ our @EXPORT = (qw(&DefAutoload &DefExpandable
     &convertLaTeXArgs),
 
   # Class, Package and File loading.
-  qw(&Input &InputContent &InputDefinitions &RequirePackage &LoadClass &LoadPool &FindFile
+  qw(&Input &InputContent &InputDefinitions &RequirePackage &LoadClass &LoadPool &LoadFormat &FindFile
     &DeclareOption &PassOptions &ProcessOptions &ExecuteOptions
     &AddToMacro &AtBeginDocument &AtEndDocument),
 
@@ -389,16 +389,19 @@ sub Let {
   AfterAssignment();
   return; }
 
+# Digest the stuff, allowing side-effects, mode changes, etc!
 sub Digest {
   my (@stuff) = @_;
   my $mode    = $STATE->lookupValue('MODE');
   my $stomach = $STATE->getStomach;
   my $value   = $stomach->digest(Tokens(map { (ref $_ ? $_ : TokenizeInternal($_)) } @stuff));
 
-  my $nmode   = $STATE->lookupValue('MODE');
+  my $nmode = $STATE->lookupValue('MODE');
   $stomach->leaveHorizontal_internal if ($mode ne $nmode) && ($nmode eq 'horizontal');
   return $value; }
 
+# Digest the stuff as if it were an \hbox, in restricted_horixonatal mode,
+# so no local side-effects
 sub DigestText {
   my (@stuff) = @_;
   my $stomach = $STATE->getStomach;
@@ -407,7 +410,7 @@ sub DigestText {
   $stomach->endMode('restricted_horizontal');
   return $result; }
 
-# probably need to export this, as well?
+# Digest stuff, w/o mode changes or side-effects like DigestText, but returning perl string
 sub DigestLiteral {
   my (@stuff) = @_;
 # Perhaps should do StartSemiverbatim, but is it safe to push a frame? (we might cover over valid changes of state!)
@@ -418,7 +421,7 @@ sub DigestLiteral {
   my $value = $STATE->getStomach->digest(Tokens(map { (ref $_ ? $_ : Tokenize($_)) } @stuff));
   AssignValue(font => $font);
   $stomach->endMode('restricted_horizontal');
-  return $value; }
+  return ToString($value); }
 
 sub DigestIf {
   my ($token) = @_;
@@ -664,7 +667,8 @@ sub NewCounter {
   }
   else {
     Warn('unexpected', $cs, undef,
-      "Counter " . ToString($cs) . " was already defined as $prevdefn; redefining") if $prevdefn;
+      "Counter " . ToString($cs) . " was already defined as $prevdefn; redefining")
+      if $prevdefn && ($prevdefn ne LookupMeaning(T_CS('\relax')));
     DefRegisterI($cs, undef, Number(0), allocate => '\count'); }
   AfterAssignment();
   AssignValue("\\cl\@$ctr" => Tokens(), 'global') unless LookupValue("\\cl\@$ctr");
@@ -761,7 +765,7 @@ sub RefStepCounter {
   DefMacroI(T_CS('\@currentlabel'), undef, T_CS("\\the$ctr"),     scope => 'global');
   DefMacroI(T_CS('\@currentID'),    undef, T_CS("\\the$ctr\@ID"), scope => 'global') if $has_id;
 
-  my $id = $has_id && CleanID(ToString(DigestLiteral(T_CS("\\the$ctr\@ID"))));
+  my $id = $has_id && CleanID(DigestLiteral(T_CS("\\the$ctr\@ID")));
 
   my $refnum = DigestText(T_CS("\\the$ctr"));
   my $tags   = Digest(Invocation(T_CS('\lx@make@tags'), $type));
@@ -851,16 +855,20 @@ sub deactivateCounterScope {
 
 # For UN-numbered units
 sub RefStepID {
-  my ($type) = @_;
-  my $ctr    = LookupMapping('counter_for_type', $type) || $type;
-  my $unctr  = "UN$ctr";
+  my ($type)   = @_;
+  my $ctr      = LookupMapping('counter_for_type', $type) || $type;
+  my $unctr    = "UN$ctr";
+  my $unctrcmd = '\c@' . $unctr;
+  my $defn;
+  if (!($defn = $STATE->lookupDefinition(T_CS($unctrcmd))) || !$defn->isRegister) {
+    NewCounter($ctr); }    # Avoid fatals...
   StepCounter($unctr);
   maybePreemptRefnum($ctr, 1);
   DefMacroI(T_CS("\\\@$ctr\@ID"), undef,
-    Tokens(T_OTHER('x'), Explode(LookupValue('\c@' . $unctr)->valueOf)),
+    Tokens(T_OTHER('x'), Explode(LookupValue($unctrcmd)->valueOf)),
     scope => 'global');
   DefMacroI(T_CS('\@currentID'), undef, T_CS("\\the$ctr\@ID"));
-  my $id = CleanID(ToString(DigestLiteral(T_CS("\\the$ctr\@ID"))));
+  my $id = CleanID(DigestLiteral(T_CS("\\the$ctr\@ID")));
   return (id => $id); }
 
 # For UN-numbered units, recycle the last ID without incrementing
@@ -868,7 +876,7 @@ sub RefStepID {
 sub RefCurrentID {
   my ($type) = @_;
   my $ctr    = LookupMapping('counter_for_type', $type) || $type;
-  my $id     = CleanID(ToString(DigestLiteral(T_CS("\\the$ctr\@ID"))));
+  my $id     = CleanID(DigestLiteral(T_CS("\\the$ctr\@ID")));
   return (id => $id);
 }
 
@@ -943,18 +951,16 @@ sub Expand {
   my (@tokens) = @_;
   return () unless @tokens;
   my $gullet = $STATE->getStomach->getGullet;
-  return $gullet->readingFromMouth(LaTeXML::Core::Mouth->new(), sub {
-      $gullet->unread(T_BEGIN, @tokens, T_END);
-      return $gullet->readBalanced(2, 0, 1); }); }
+  return $gullet->readingFromMouth(Tokens(T_BEGIN, @tokens, T_END), sub {
+    $gullet->readBalanced(2, 0, 1); }); }
 
 # Return $tokens, partially expanded (defer protected, and results of \the)
 sub ExpandPartially {
   my (@tokens) = @_;
   return () unless @tokens;
   my $gullet = $STATE->getStomach->getGullet;
-  return $gullet->readingFromMouth(LaTeXML::Core::Mouth->new(), sub {
-      $gullet->unread(T_BEGIN, @tokens, T_END);
-      return $gullet->readBalanced(1, 0, 1); }); }
+  return $gullet->readingFromMouth(Tokens(T_BEGIN, @tokens, T_END), sub {
+    $gullet->readBalanced(1, 0, 1); }); }
 
 sub Invocation {
   my ($token, @args) = @_;
@@ -1264,7 +1270,7 @@ sub SetCondition {
 #    registerType : for parameters (but needs to be worked into DefParameter, below).
 
 my $primitive_options = {    # [CONSTANT]
-  isPrefix     => 1, scope           => 1, font => 1,
+  isPrefix     => 1, scope           => 1, font            => 1,
   mode         => 1, enterHorizontal => 1, leaveHorizontal => 1,
   requireMath  => 1, forbidMath      => 1,
   beforeDigest => 1, afterDigest     => 1,
@@ -1291,10 +1297,10 @@ sub DefPrimitiveI {
   $STATE->installDefinition(LaTeXML::Core::Definition::Primitive
       ->new($defcs, $paramlist, $replacement,
       beforeDigest => flatten(($options{requireMath} ? (sub { requireMath($cs); }) : ()),
-        ($options{forbidMath} ? (sub { forbidMath($cs); }) : ()),
+        ($options{forbidMath}      ? (sub { forbidMath($cs); }) : ()),
         ($options{enterHorizontal} ? (sub { $_[0]->enterHorizontal; }) : ()),
         ($options{leaveHorizontal} ? (sub { $_[0]->leaveHorizontal; }) : ()),
-        ($mode                ? (sub { $_[0]->beginMode($mode); })
+        ($mode                     ? (sub { $_[0]->beginMode($mode); })
           : ($bounded ? (sub { $_[0]->bgroup; }) : ())),
         ($options{font} ? (sub { MergeFont(%{ $options{font} }); }) : ()),
         $options{beforeDigest}),
@@ -1364,10 +1370,8 @@ sub LookupDimension {
     if ($defn->isRegister) {    # Easy (and proper) case.
       return $defn->valueOf; }
     else {
-      $STATE->getStomach->getGullet->readingFromMouth(LaTeXML::Core::Mouth->new(), sub { # start with empty mouth
-          my ($gullet) = @_;
-          $gullet->unread($cs);    # but put back tokens to be read
-          return $gullet->readDimension; }); } }
+      return $STATE->getStomach->getGullet->readingFromMouth($cs, sub {
+        $_[0]->readDimension; }); } }
   else {
     Warn('expected', 'register', $STATE->getStomach,
       "The control sequence " . ToString($cs) . " is not a register"); }
@@ -1409,13 +1413,13 @@ sub flatten {
 #   properties      : a hashref listing default values of properties to assign to the Whatsit.
 #                     These properties can be used in the constructor.
 my $constructor_options = {    # [CONSTANT]
-  mode         => 1, requireMath   => 1, forbidMath => 1, font       => 1,
+  mode            => 1, requireMath     => 1, forbidMath => 1, font => 1,
   enterHorizontal => 1, leaveHorizontal => 1,
-  alias        => 1, reversion     => 1, sizer      => 1, properties => 1,
-  nargs        => 1, attributeForm => 1,
-  beforeDigest => 1, afterDigest   => 1, beforeConstruct => 1, afterConstruct => 1,
-  captureBody  => 1, scope         => 1, bounded         => 1, locked         => 1,
-  outer        => 1, long          => 1, robust          => 1 };
+  alias           => 1, reversion       => 1, sizer => 1, properties => 1,
+  nargs           => 1, attributeForm   => 1,
+  beforeDigest    => 1, afterDigest     => 1, beforeConstruct => 1, afterConstruct => 1,
+  captureBody     => 1, scope           => 1, bounded         => 1, locked         => 1,
+  outer           => 1, long            => 1, robust          => 1 };
 
 sub inferSizer {
   my ($sizer, $reversion) = @_;
@@ -1443,10 +1447,10 @@ sub DefConstructorI {
   $STATE->installDefinition(LaTeXML::Core::Definition::Constructor
       ->new($defcs, $paramlist, $replacement,
       beforeDigest => flatten(($options{requireMath} ? (sub { requireMath($cs); }) : ()),
-        ($options{forbidMath} ? (sub { forbidMath($cs); }) : ()),
+        ($options{forbidMath}      ? (sub { forbidMath($cs); }) : ()),
         ($options{enterHorizontal} ? (sub { $_[0]->enterHorizontal; }) : ()),
         ($options{leaveHorizontal} ? (sub { $_[0]->leaveHorizontal; }) : ()),
-        ($mode                ? (sub { $_[0]->beginMode($mode); })
+        ($mode                     ? (sub { $_[0]->beginMode($mode); })
           : ($bounded ? (sub { $_[0]->bgroup; }) : ())),
         ($options{font} ? (sub { MergeFont(%{ $options{font} }); }) : ()),
         $options{beforeDigest}),
@@ -1802,9 +1806,9 @@ sub defmath_prim {
         my $locator    = $stomach->getGullet->getLocator;
         my %properties = %options;
         my $font       = LookupValue('font')->merge(%$reqfont)->specialize($string);
-#        my $mode       = (LookupValue('IN_MATH')  ? 'math'                    : 'text');
-        my $mode       = LookupValue('MODE');
-        my $alias      = (defined $options{alias} ? coerceCS($options{alias}) : undef);
+        #        my $mode       = (LookupValue('IN_MATH')  ? 'math'                    : 'text');
+        my $mode  = LookupValue('MODE');
+        my $alias = (defined $options{alias} ? coerceCS($options{alias}) : undef);
         my $reversion =
           ((!defined $options{reversion}) && (($options{revert_as} || '') eq 'presentation')
           ? $presentation : $alias // $cs);
@@ -1859,7 +1863,7 @@ sub defmath_cons {
 my $environment_options = {    # [CONSTANT]
   mode             => 1, requireMath     => 1, forbidMath => 1,
   enterHorizontal  => 1, leaveHorizontal => 1,
-  properties       => 1, nargs           => 1, font       => 1,
+  properties       => 1, nargs           => 1, font => 1,
   beforeDigest     => 1, afterDigest     => 1,
   afterDigestBegin => 1, beforeDigestEnd => 1, afterDigestBody => 1,
   beforeConstruct  => 1, afterConstruct  => 1,
@@ -1878,7 +1882,7 @@ sub DefEnvironment {
 sub DefEnvironmentI {
   my ($name, $paramlist, $replacement, %options) = @_;
   my $mode = $options{mode};
-  $mode    = 'restricted_horizontal' if !$mode || ($mode eq 'text');
+  $mode      = 'restricted_horizontal'            if !$mode || ($mode eq 'text');
   $name      = ToString($name)                    if ref $name;
   $paramlist = parseParameters($paramlist, $name) if defined $paramlist && !ref $paramlist;
   # Magic form: CS with name \begin{env} bypasses some LaTeX
@@ -1898,9 +1902,9 @@ sub DefEnvironmentI {
         sub { $_[0]->bgroup; },
         sub { my $b = LookupValue('@environment@' . $name . '@atbegin');
           ($b ? Digest(@$b) : ()); },
-        ($options{enterHorizontal} ? (sub { $_[0]->enterHorizontal; }) : ()),
-        ($options{leaveHorizontal} ? (sub { $_[0]->leaveHorizontal; }) : ()),
-        ($mode                ? (sub { $_[0]->beginMode($mode); }) : () ),
+        ($options{enterHorizontal} ? (sub { $_[0]->enterHorizontal; })  : ()),
+        ($options{leaveHorizontal} ? (sub { $_[0]->leaveHorizontal; })  : ()),
+        ($mode                     ? (sub { $_[0]->beginMode($mode); }) : ()),
         sub { AssignValue(current_environment => $name);
           DefMacroI('\@currenvir', undef, $name); },
         ($options{font} ? (sub { MergeFont(%{ $options{font} }); }) : ()),
@@ -1944,11 +1948,11 @@ sub DefEnvironmentI {
   $STATE->installDefinition(LaTeXML::Core::Definition::Constructor
       ->new(T_CS("\\$name"), $paramlist, $replacement,
       beforeDigest => flatten(($options{requireMath} ? (sub { requireMath($name); }) : ()),
-        ($options{forbidMath} ? (sub { forbidMath($name); })              : ()),
-        ($options{enterHorizontal} ? (sub { $_[0]->enterHorizontal; }) : ()),
-        ($options{leaveHorizontal} ? (sub { $_[0]->leaveHorizontal; }) : ()),
-        ($mode                ? (sub { $_[0]->beginMode($mode); })        : ()),
-        ($options{font}       ? (sub { MergeFont(%{ $options{font} }); }) : ()),
+        ($options{forbidMath}      ? (sub { forbidMath($name); })              : ()),
+        ($options{enterHorizontal} ? (sub { $_[0]->enterHorizontal; })         : ()),
+        ($options{leaveHorizontal} ? (sub { $_[0]->leaveHorizontal; })         : ()),
+        ($mode                     ? (sub { $_[0]->beginMode($mode); })        : ()),
+        ($options{font}            ? (sub { MergeFont(%{ $options{font} }); }) : ()),
         $options{beforeDigest}),
       afterDigest     => flatten($options{afterDigestBegin}),
       afterDigestBody => flatten($options{afterDigestBody}),
@@ -2579,9 +2583,11 @@ sub InputDefinitions {
       # These arguments mysteriously appear in \@onefilewith@ptions, MUCH later than \@pushfilename
       # We place the neaded data after \@pushfilename, but since we're Digesting in isolation,
       # they'll disappear if they aren't consumed by expl3.  Whew!
-      Digest(Tokens(T_CS('\@pushfilename'),
-          T_BEGIN, T_END, T_BEGIN, T_END, T_BEGIN, Explode($name), T_END))
-        if $pushpop;
+      if ($pushpop) {
+        Digest(Tokens(T_CS('\@pushfilename'),
+            T_BEGIN, T_END, T_BEGIN, T_END, T_BEGIN, Explode($name), T_END)); }
+      else {
+        Digest(T_CS('\lx@pushfilename')); }
       # For \RequirePackageWithOptions, pass the options from the outer class/style to the inner one.
       if (my $passoptions = $options{withoptions} && $prevname
         && LookupValue('opt@' . $prevname . "." . $prevext)) {
@@ -2627,9 +2633,9 @@ sub InputDefinitions {
       Digest(T_CS('\\' . $name . '.' . $astype . '-h@@k'));
       DefMacroI('\@currname', undef, Tokens(Explode($prevname))) if $prevname;
       DefMacroI('\@currext',  undef, Tokens(Explode($prevext)))  if $prevext;
-      Digest(T_CS('\@popfilename')) if $pushpop;
+      Digest(($pushpop ? T_CS('\@popfilename') : T_CS('\lx@popfilename')));
       resetOptions(); }    # And reset options afterwards, too.
-    # Should not end up in horizontal mode (unless initially were!)
+                           # Should not end up in horizontal mode (unless initially were!)
     $STATE->getStomach->leaveHorizontal_internal if $mode ne 'horizontal';
     return $file; }
   elsif (!$options{noerror}) {
@@ -2713,16 +2719,36 @@ sub LoadClass {
       return; } } }
 
 sub LoadPool {
-  my ($pool) = @_;
+  my ($pool, %options) = @_;
   $pool = ToString($pool) if ref $pool;
   if (my $success = InputDefinitions($pool, type => 'pool', notex => 1, noerror => 1,
       installation_subdir => 'Engine')) {
     return $success; }
-  else {
+  elsif (!$options{noerror}) {
     Error('missing_file', "$pool.pool.ltxml", $STATE->getStomach->getGullet,
       "Can't find binding for pool $pool (installation error)",
-      maybeReportSearchPaths());
-    return; } }
+      maybeReportSearchPaths()); }
+  return; }
+
+sub LoadFormat {
+  my ($format) = @_;
+  $format = ToString($format) if ref $format;
+  my $success;
+  if ((!$ENV{LATEXML_NODUMP})
+    && FindFile($format . '_dump', type => 'pool', notex => 1,
+      installation_subdir => 'Engine')) {    # dump of $format?
+    LoadPool($format . '_bootstrap', noerror => 1);
+    local $LaTeXML::LOCATOR = LaTeXML::Common::Locator->new($format, 0, 0, 0, 0);
+    $success = LoadPool($format . '_dump');
+    LoadPool($format . '_constructs', noerror => 1); }
+  elsif (FindFile($format . '_base', type => 'pool', notex => 1,
+      installation_subdir => 'Engine')) {    # but prepped for dump?
+    LoadPool($format . '_bootstrap', noerror => 1);
+    $success = LoadPool($format . '_base');
+    LoadPool($format . '_constructs', noerror => 1); }
+##  else {
+##    $success = LoadPool($format); }
+  return $success; }
 
 # Somewhat an act of desperation in contexts like arXiv
 # where we may have a bunch of random styles & classes that load other packages
@@ -2926,9 +2952,19 @@ sub decodeMathChar {
       elsif ($fontdef = LookupValue('textfont_' . $fam))         { $downsize = 2; } }
     my $defn = $STATE->lookupDefinition($fontdef);
     $fontinfo = $defn && $defn->isFontDef;
-    if ($fontinfo && ($$basefontinfo{size} != $curfont->getSize)) { # If we've gotten an explicit font SIZE change; Adjust!
+    if(! $fontinfo) {
+      $defn = $STATE->lookupDefinition(T_CS('\lx@default@font'));
+      $fontinfo = $defn && $defn->isFontDef; }
+    if ($fontinfo && (ref $fontinfo eq 'HASH')
+        && $basefontinfo && ($$basefontinfo{size} != $curfont->getSize)) {
+      # If we've gotten an explicit font SIZE change; Adjust!
       $fontinfo = {%$fontinfo}; $$fontinfo{size} = $curfont->getSize; } }
-  my $font = $curfont->merge(%$fontinfo);
+  my $font = $curfont;
+  if (ref $fontinfo ne 'HASH') {
+    Warn("unexpected", "fontinfo", undef, "At mathcode $mathcode; got $fontinfo"); }
+  else {
+    $font = $font->merge(%$fontinfo); }
+
   if ($downsize > 0) { $font = $curfont->merge(scripted => 1); }
   if ($downsize > 1) { $font = $curfont->merge(scripted => 1); }
 
@@ -3542,7 +3578,7 @@ DefPrimitive options are
 
 See L</"Common Options">.
 
-=item C<mode=E<gt> ('restricted_horizontal' | 'internal_vertical' | 'display_math' | 'inline_math')>
+=item C<mode=E<gt> ('restricted_horizontal' | 'internal_vertical' | 'display_math' | 'math')>
 
 Binds to this mode during digestion, with grouping.
 
@@ -4616,6 +4652,15 @@ Expands the given C<$tokens> according to current definitions.
 X<Digest>
 Processes and digestes the C<$tokens>.  Any arguments needed by
 control sequences in C<$tokens> must be contained within the C<$tokens> itself.
+This allows side-effects and mode changes.
+
+X<DigestText>
+Processes and digestes the C<$tokens> as if within an C<\hbox>,
+so mode changes and side-dffects do not leak out.
+
+X<DigestLiteral>
+Processes and digestes the C<$tokens> returning a Perl string,
+Like C<DigestText>, neither mode changes nor side-dffects leak out.
 
 =item C<< @tokens = Invocation($cs,@args); >>
 

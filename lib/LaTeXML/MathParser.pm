@@ -350,6 +350,9 @@ sub parse_rec {
           $attr{font} = $font->specialize($content); } }
       else {
         delete $attr{_font}; }
+      # Don't copy _box (as string!) from $node if $result already has _box recorded.
+      if (exists $attr{_box} && p_getAttribute($result,'_box')) {
+        delete $attr{_box}; }
       foreach my $key (keys %attr) {
         next unless ($key =~ /^_/) || $document->canHaveAttribute($rtag, $key);
         my $value = $attr{$key};
@@ -1266,7 +1269,9 @@ sub MorphVertbar {
       %attrib = map { (getQName($_) => $_->getValue) }
         grep { $_->nodeType == XML_ATTRIBUTE_NODE } $node->attributes; }
     $attrib{role} = $role;
-    $newnode = [getQName($node), {%attrib}, $char]; }
+    my $tag       = getQName($node);
+    $newnode      = ($tag eq 'ltx:XMRef'
+                     ? [$tag, {%attrib}] : [$tag, {%attrib}, $char]); }
   return $newnode; }
 
 # ================================================================================

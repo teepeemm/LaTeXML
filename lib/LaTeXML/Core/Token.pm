@@ -102,7 +102,8 @@ sub Token {
 sub Explode {
   my ($string) = @_;
   return (defined $string
-    ? map { ($_ eq ' ' ? T_SPACE() : T_OTHER($_)) } split('', $string)
+    ? map { ($_ eq ' ' ? T_SPACE() : ($_ eq "\n" ? Token($_, CC_SPACE)
+      : T_OTHER($_))) } split('', $string)
     : ()); }
 
 # Similar to Explode, but convert letters to catcode LETTER and others to OTHER
@@ -110,7 +111,7 @@ sub Explode {
 sub ExplodeText {
   my ($string) = @_;
   return (defined $string
-    ? map { ($_ eq ' ' ? T_SPACE() : (/[a-zA-Z]/ ? T_LETTER($_) : T_OTHER($_))) }
+    ? map { ($_ eq ' ' ? T_SPACE() : ($_ eq "\n" ? Token($_, CC_SPACE) : (/[a-zA-Z]/ ? T_LETTER($_) : T_OTHER($_)))) }
       split('', $string)
     : ()); }
 
@@ -192,7 +193,7 @@ our @CATCODE_EXECUTABLE = (    # [CONSTANT]
 our @CATCODE_STANDARDCHAR = (    # [CONSTANT]
   "\\",  '{',   '}',   q{$},
   q{&},  "\n",  q{#},  q{^},
-  q{_},  undef, undef, undef,
+  q{_},  undef, ' ', undef,
   undef, undef, q{%},  undef,
   undef, undef, undef, undef);
 

@@ -127,9 +127,7 @@ sub digest {
   no warnings 'recursion';
   return unless defined $tokens;
   return
-    $$self{gullet}->readingFromMouth(LaTeXML::Core::Mouth->new(), sub {
-      my ($gullet) = @_;
-      $gullet->unread($tokens);
+    $$self{gullet}->readingFromMouth($tokens, sub {
       $STATE->clearPrefixes;    # prefixes shouldn't apply here.
       my $mode      = $STATE->lookupValue('MODE');
       my $ismath    = $STATE->lookupValue('IN_MATH');
@@ -327,9 +325,14 @@ sub bgroup {
 
 sub egroup {
   my ($self) = @_;
-  if (    ##$STATE->isValueBound('MODE', 0) ||    # Last stack frame was a mode switch!?!?!
-    $STATE->lookupValue('groupNonBoxing')) {    # or group was opened with \begingroup
-    Error('unexpected', $LaTeXML::CURRENT_TOKEN, $self, "Attempt to close boxing group",
+  if ($STATE->isValueBound('BOUND_MODE', 0)) { # Last stack frame was a mode switch!?!?!
+    # Don't pop if there's an error; maybe we'll recover?
+    Error('unexpected', $LaTeXML::CURRENT_TOKEN, $self,
+      "Attempt to close a group that switched to mode ".$STATE->lookupValue('MODE'),
+      currentFrameMessage($self)); }
+  elsif ($STATE->lookupValue('groupNonBoxing')) { # or group was opened with \begingroup
+    Error('unexpected', $LaTeXML::CURRENT_TOKEN, $self,
+      "Attempt to close boxing group",
       currentFrameMessage($self)); }
   else {                                        # Don't pop if there's an error; maybe we'll recover?
     popStackFrame($self, 0); }
@@ -342,9 +345,14 @@ sub begingroup {
 
 sub endgroup {
   my ($self) = @_;
-  if (    ##$STATE->isValueBound('MODE', 0) ||    # Last stack frame was a mode switch!?!?!
-    !$STATE->lookupValue('groupNonBoxing')) {    # or group was opened with \bgroup
-    Error('unexpected', $LaTeXML::CURRENT_TOKEN, $self, "Attempt to close non-boxing group",
+  if ($STATE->isValueBound('BOUND_MODE', 0)) { # Last stack frame was a mode switch!?!?!
+    # Don't pop if there's an error; maybe we'll recover?
+    Error('unexpected', $LaTeXML::CURRENT_TOKEN, $self,
+      "Attempt to close a group that switched to mode ".$STATE->lookupValue('MODE'),
+      currentFrameMessage($self)); }
+  elsif (!$STATE->lookupValue('groupNonBoxing')) {    # or group was opened with \bgroup
+    Error('unexpected', $LaTeXML::CURRENT_TOKEN, $self,
+      "Attempt to close non-boxing group",
       currentFrameMessage($self)); }
   else {                                         # Don't pop if there's an error; maybe we'll recover?
     popStackFrame($self, 1); }
@@ -375,7 +383,7 @@ sub endgroup {
 #     This is a bound mode set by \hbox.
 #     It is the default mode for digesting Whatsit arguments, although they
 #     may be absorbed into paragraphs where line-breaks occur.
-#  inline_math : math within a horizontal mode. A bound mode.
+#  math : math within a horizontal mode. A bound mode.
 #  display_math : math within a vertical mode. A bound mode.
 #     Should be illegal in restricted_horizontal mode;
 #     Should leaveHorizontal if in horizontal mode.
@@ -386,7 +394,8 @@ our %bindable_mode = (
     restricted_horizontal => 'restricted_horizontal',
     vertical              => 'internal_vertical',
     internal_vertical     => 'internal_vertical',
-    inline_math           => 'inline_math',
+    math                  => 'math',
+    inline_math           => 'math',
     display_math          => 'display_math');
 
 # Switch to horizontal mode, w/o stacking the mode
@@ -396,7 +405,7 @@ sub enterHorizontal {
   my($self) = @_;
   my $mode  = $STATE->lookupValue('MODE');
   if($mode =~ /vertical$/){
-    Debug("MODE entering $mode => horizontal, due to ".Stringify($LaTeXML::CURRENT_TOKEN))
+    Debug("MODE enter horizontal, from $mode, for ".Stringify($LaTeXML::CURRENT_TOKEN))
         if $LaTeXML::DEBUG{modes};
     $STATE->assignValue(MODE => 'horizontal', 'inplace'); } # SAME frame as BOUND_MODE!
   elsif (($mode =~ /horizontal$/) || ($mode =~ /math$/)) { } # ignorable?
@@ -414,6 +423,8 @@ sub leaveHorizontal {
   # BUT still allow user defined \par !
   if (($mode eq 'horizontal') && ($bound =~ /vertical$/)) {
     local $LaTeXML::INTERNAL_PAR = 1;
+    Debug("MODE leaving $mode via \\par (within $bound), for ".Stringify($LaTeXML::CURRENT_TOKEN))
+        if $LaTeXML::DEBUG{modes};
     push(@LaTeXML::LIST, $self->invokeToken(T_CS('\par'))); }
   return; }
 
@@ -429,7 +440,7 @@ sub repackHorizontal {
   while(@LaTeXML::LIST
         && ($item = $LaTeXML::LIST[-1])
         && (($mode = ($item->getProperty('mode')||'horizontal'))
-            =~ /^(?:horizontal|restricted_horizontal|inline_math)$/)) {
+            =~ /^(?:horizontal|restricted_horizontal|math)$/)) {
     # if ONLY horizontal mode spaces, we can prune them; it just makes an empty ltx:p
     $keep = 1 if ($mode ne 'horizontal') || ! $item->getProperty('isSpace');
     unshift(@para,pop(@LaTeXML::LIST)); }
@@ -445,7 +456,7 @@ sub leaveHorizontal_internal {
   # This needs to be an invisible, and slightly gentler, \par (see \lx@normal@par)
   # BUT still allow user defined \par !
   if (($mode eq 'horizontal') && ($bound =~ /vertical$/)) {
-    Debug("MODE leaving $mode => $bound, due to ".Stringify($LaTeXML::CURRENT_TOKEN))
+    Debug("MODE leave $mode, resuming $bound, for ".Stringify($LaTeXML::CURRENT_TOKEN))
         if $LaTeXML::DEBUG{modes};
     repackHorizontal($self);
     $STATE->assignValue(MODE => $bound, 'inplace'); }
@@ -454,17 +465,20 @@ sub leaveHorizontal_internal {
 sub beginMode {
   my ($self, $umode) = @_;
   if (my $mode = $bindable_mode{$umode}) {
-    my $prevmode = $STATE->lookupValue('BOUND_MODE');
-    my $ismath   = $mode =~ /math$/;
-    my $wasmath  = $prevmode =~ /math$/;
+    my $prevmode  = $STATE->lookupValue('MODE');
+    my $prevbound = $STATE->lookupValue('BOUND_MODE');
+    my $ismath    = $mode =~ /math$/;
+    my $wasmath   = $prevmode =~ /math$/;
     pushStackFrame($self);    # Effectively bgroup
     $STATE->assignValue(BOUND_MODE => $mode,   'local'); # New value within this frame!
     $STATE->assignValue(MODE       => $mode,   'local');
     $STATE->assignValue(IN_MATH    => $ismath, 'local');
-    Debug("MODE binding $prevmode => $mode, due to ".Stringify($LaTeXML::CURRENT_TOKEN))
+    Debug("MODE bind $mode, from $prevmode "
+          .($prevbound eq $prevmode ? '' : "(in $prevbound) ")
+          .", for ".Stringify($LaTeXML::CURRENT_TOKEN))
         if $LaTeXML::DEBUG{modes};
     my $curfont = $STATE->lookupValue('font');
-    if    ($mode eq $prevmode) { }
+    if    ($mode eq $prevbound) { }
     elsif ($ismath) {
       # When entering math mode, we set the font to the default math font,
       # and save the text font for any embedded text.
@@ -504,7 +518,7 @@ sub endMode {
     else {
       leaveHorizontal_internal($self) if $mode =~ /vertical$/; # nopar version!
       popStackFrame($self);        # Effectively egroup.
-      Debug("MODE unbinding $mode => ".$STATE->lookupValue('MODE').", due to ".Stringify($LaTeXML::CURRENT_TOKEN))
+      Debug("MODE unbind $mode, resume ".$STATE->lookupValue('MODE').", for ".Stringify($LaTeXML::CURRENT_TOKEN))
           if $LaTeXML::DEBUG{modes};
     }}
   else {

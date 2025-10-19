@@ -639,6 +639,48 @@ DefConstructor('\lx@gen@plain@matrix@ RequiredKeyVals:lx@GEN {}',
     $whatsit->setProperties(alignment => LookupValue('Alignment'));
     return; });
 
+# Similar, but as an ams style engironment, to support amsmath, amscd, etc
+# Essentially same as \lx#gen@plain@matrix@, but for the body & reversion!
+DefConstructor('\lx@ams@matrix@ RequiredKeyVals:lx@GEN DigestedBody',
+  "?#needXMDual("
+    . "<ltx:XMDual>"
+    . "?#delimitermeaning(<ltx:XMApp><ltx:XMTok meaning='#delimitermeaning'/>)()"
+    . "?#datameaning(<ltx:XMApp><ltx:XMTok meaning='#datameaning'/>)()"
+    . "<ltx:XMRef _xmkey='#xmkey'/>"
+    . "?#delimitermeaning(</ltx:XMApp>)()"
+    . "?#datameaning(</ltx:XMApp>)()"
+    . "<ltx:XMWrap>#left<ltx:XMArg _xmkey='#xmkey'>#2</ltx:XMArg>#right</ltx:XMWrap>"
+    . "</ltx:XMDual>"
+    . ")("
+    . "#2"
+    . ")",
+  properties  => sub { %{ $_[1]->getKeyVals }; },
+  afterDigest => sub {
+    my ($stomach, $whatsit) = @_;
+    my $kv = $whatsit->getArg(1);
+    if ($kv->getValue('datameaning') || $kv->getValue('delimitermeaning')) {
+      $whatsit->setProperties(
+        needXMDual => 1,
+        xmkey      => LaTeXML::Package::getXMArgID()); }
+    return; },
+  reversion => sub {
+    my ($whatsit, $kv, $body) = @_;
+    my $name  = $kv->getValue('name');
+    my $align = $kv->getValue('alignment');
+    # Yuck!
+    my $alignment = $body->getProperty('alignment');
+    $alignment->normalizeAlignment if $alignment;
+    my $nc = ($alignment ? scalar(@{ $$alignment{columnwidths} }) : 0);
+    (($nc > 10 ? Invocation(T_CS('\setcounter'), T_OTHER('MaxMatrixCols'), T_OTHER($nc)) : ()),
+      ($name ? (T_CS('\begin'), T_BEGIN, Revert($name), T_END) : ()),
+      (IsEmpty($align)
+        ? ()
+        : ($kv->getValue('alignment-required')
+          ? (T_BEGIN, Revert($align), T_END) : (T_OTHER('['), Revert($align), T_OTHER(']')))),
+      Revert($body),
+      ($name ? (T_CS('\end'), T_BEGIN, Revert($name), T_END) : ())); }
+);
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Cases: Generalized
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -837,8 +879,11 @@ sub addColumnToMathFork {
       $box = Box($string); }
     elsif ($type eq '#Comment') { }
     else {
-      Warn('unexpected', $type, $cell,
-        "Don't know how to synthesize equation with $type in column"); }
+      # Hopefully, we can stuff whatever this thing is into an XMText
+      my $txt = $document->openElementAt($document->getFirstChildElement($mainfork), 'ltx:XMText');
+      $document->appendClone($txt, $node);
+      $document->closeElementAt($txt);
+      $box = $document->getNodeBox($node); }
     # Add the boxes from this cell to the previously collected ones in the main branch.
     if ($box) {
       my $composed = MathWhatsit($document->getNodeBox($mainfork)->getBody, $box);
